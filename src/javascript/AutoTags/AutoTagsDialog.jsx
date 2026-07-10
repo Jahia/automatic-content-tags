@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
 import {Dialog} from '@material-ui/core';
-import {Button, Dropdown, Loader, Tag, Typography, Warning, Separator} from '@jahia/moonstone';
+import {Button, Dropdown, Loader, Tag, Typography, Warning} from '@jahia/moonstone';
 import PropTypes from 'prop-types';
 import {useTranslation} from 'react-i18next';
 import styles from './AutoTagsDialog.scss';
@@ -84,7 +84,7 @@ export const AutoTagsDialog = ({
                 <span className={styles.iconBadge}
                       style={{display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}
                 >
-                    <Tag size="big"/>
+                    <Tag/>
                 </span>
                 <span className={styles.headerText} style={{display: 'flex', flexDirection: 'column', minWidth: 0}}>
                     <Typography isUpperCase id="dialog-autotags-title" variant="heading" weight="bold" className={styles.title}>
@@ -96,7 +96,7 @@ export const AutoTagsDialog = ({
                 </span>
             </div>
 
-            <Separator className={styles.separator}/>
+            <div className={styles.separator}/>
 
             <div className={styles.content}>
                 <label className={styles.field} style={{display: 'flex', flexDirection: 'column', gap: 8}}>
@@ -120,7 +120,7 @@ export const AutoTagsDialog = ({
                 </label>
             </div>
 
-            <Separator className={styles.separator}/>
+            <div className={styles.separator}/>
 
             <div className={styles.footer} style={{display: 'flex', alignItems: 'center', gap: 16}}>
                 <Typography
@@ -129,7 +129,7 @@ export const AutoTagsDialog = ({
                 >
                     {loadingQuery ? (
                         <>
-                            <Loader size="default"/>
+                            <Loader size="small"/>
                             {t('automatic-content-tags:label.dialog.generating')}
                         </>
                     ) : (

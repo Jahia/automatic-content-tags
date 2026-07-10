@@ -1,67 +1,70 @@
+/* This dialog renders through a portal into document.body, outside the Moonstone
+   theme scope, so CSS custom properties are unavailable here. Use hardcoded
+   Jahia-palette hex + px (same approach as page-audit / content-review). */
+
 .paper {
     overflow-y: visible;
 }
 
 /* Header — icon badge aligned with title/subtitle stack (layout via inline flex) */
 .header {
-    padding: var(--spacing-big) var(--spacing-big) var(--spacing-medium);
+    padding: 24px 24px 16px;
 }
 
 .iconBadge {
     width: 40px;
     height: 40px;
     border-radius: 8px;
-    background-color: var(--color-accent_light);
-    color: var(--color-accent_dark);
-}
-
-.headerText {
-    gap: var(--spacing-nano);
+    background-color: #e6f5fc;
+    color: #00a0e3;
 }
 
 .title {
-    color: var(--color-text);
+    color: #232a30;
 }
 
 .subtitle {
-    color: var(--color-gray_dark);
+    color: #5c6971;
 }
 
 /* Content */
 .content {
-    padding: var(--spacing-big);
+    padding: 8px 24px 24px;
 }
 
 .dropdown {
     max-width: 280px;
 }
 
+.fieldLabel {
+    color: #232a30;
+}
+
 /* Footer — hint/loader left, actions right */
 .footer {
-    padding: var(--spacing-medium) var(--spacing-big);
+    padding: 16px 24px;
 }
 
 .hint {
-    color: var(--color-gray_dark);
+    color: #5c6971;
 }
 
 .hintError {
-    color: var(--color-warning_dark);
+    color: #b0620d;
 }
 
 .hintIcon {
     flex-shrink: 0;
-    color: var(--color-warning);
+    color: #e9a23d;
 }
 
 .hintIconError {
-    color: var(--color-warning_dark);
-}
-
-.fieldLabel {
-    color: var(--color-text);
+    color: #b0620d;
 }
 
 .separator {
+    height: 1px;
     margin: 0;
+    border: none;
+    background-color: #e0e6ea;
 }
