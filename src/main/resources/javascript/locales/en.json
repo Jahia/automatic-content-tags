@@ -9,6 +9,7 @@
             "defaultValue": "Unselected",
             "dialogSubTitle": "Use the configured AI provider to automatically generate tags for the current content item based on its content.",
             "listLabel": "Select Tag Language",
+            "generating": "Generating tags…",
             "noTags": "No tags could be generated for this content. Note that only saved content is analysed.",
             "error": "Tag generation failed. Check the server log for details."
         }

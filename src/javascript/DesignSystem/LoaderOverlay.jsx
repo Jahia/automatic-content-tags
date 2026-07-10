@@ -1,19 +1,26 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import {Loader} from '@jahia/moonstone';
+import {Loader, Typography} from '@jahia/moonstone';
+import styles from './LoaderOverlay.scss';
 
-export const LoaderOverlay = ({status}) => (
-    <div
-        className="flexFluid flexCol_center alignCenter"
-        style={{
-            backgroundColor: 'var(--color-light)',
-            display: status ? 'block' : 'none'
-        }}
-    >
-        <Loader size="big"/>
-    </div>
-);
+export const LoaderOverlay = ({status, caption}) => {
+    if (!status) {
+        return null;
+    }
+
+    return (
+        <div className={styles.overlay}>
+            <Loader size="default"/>
+            {caption && (
+                <Typography variant="body" className={styles.caption}>
+                    {caption}
+                </Typography>
+            )}
+        </div>
+    );
+};
 
 LoaderOverlay.propTypes = {
-    status: PropTypes.bool.isRequired
+    status: PropTypes.bool.isRequired,
+    caption: PropTypes.string
 };

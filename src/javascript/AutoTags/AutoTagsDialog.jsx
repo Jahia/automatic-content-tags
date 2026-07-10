@@ -78,62 +78,73 @@ export const AutoTagsDialog = ({
                 aria-labelledby="dialog-autotags-title"
                 open={isOpen}
                 maxWidth="sm"
-                classes={{paper: styles.dialog_overflowYVisible}}
+                classes={{paper: styles.paper}}
                 onClose={onCloseDialog}
         >
-            <DialogTitle id="dialog-autotags-title" className={styles.dialogTitleContainer}>
-                <Tag size="big" className={styles.dialogLogo}/>
-                <Typography isUpperCase variant="heading" weight="bold" className={styles.dialogTitle}>
-                    {t('automatic-content-tags:label.dialog.dialogTitle')}
-                </Typography>
-                <div className={styles.dialogTitleTextContainer}>
-                    <Typography variant="subheading" className={styles.dialogSubTitle}>
+            <DialogTitle disableTypography id="dialog-autotags-title" className={styles.header}>
+                <span className={styles.iconBadge}>
+                    <Tag size="big"/>
+                </span>
+                <span className={styles.headerText}>
+                    <Typography isUpperCase variant="heading" weight="bold" className={styles.title}>
+                        {t('automatic-content-tags:label.dialog.dialogTitle')}
+                    </Typography>
+                    <Typography variant="body" className={styles.subtitle}>
                         {t('automatic-content-tags:label.dialog.dialogSubTitle')}
                     </Typography>
-                </div>
+                </span>
             </DialogTitle>
+
             <Separator className={styles.separator}/>
-            <DialogContent className={styles.dialogContent} classes={{root: styles.dialogContent_overflowYVisible}}>
-                <div className={styles.loaderOverlayWrapper}>
-                    <LoaderOverlay status={loadingQuery}/>
-                </div>
-                <Typography className={styles.copyFromLabel}>
-                    {t('automatic-content-tags:label.dialog.listLabel')}
-                </Typography>
-                <Dropdown
-                    className={styles.language}
-                    label={currentOption.label}
-                    value={currentOption.value}
-                    size="medium"
-                    isDisabled={false}
-                    maxWidth="120px"
-                    data={[defaultOption].concat(availableLanguages.map(element => {
-                        return {
-                            value: element.language,
-                            label: element.displayName
-                        };
-                    }))}
-                    onChange={handleOnChange}
+
+            <DialogContent className={styles.content} classes={{root: styles.contentRoot}}>
+                <LoaderOverlay
+                    status={loadingQuery}
+                    caption={t('automatic-content-tags:label.dialog.generating')}
                 />
+                <label className={styles.field}>
+                    <Typography variant="subheading" weight="bold" className={styles.fieldLabel}>
+                        {t('automatic-content-tags:label.dialog.listLabel')}
+                    </Typography>
+                    <Dropdown
+                        className={styles.dropdown}
+                        label={currentOption.label}
+                        value={currentOption.value}
+                        size="medium"
+                        isDisabled={loadingQuery}
+                        data={[defaultOption].concat(availableLanguages.map(element => {
+                            return {
+                                value: element.language,
+                                label: element.displayName
+                            };
+                        }))}
+                        onChange={handleOnChange}
+                    />
+                </label>
             </DialogContent>
+
             <Separator className={styles.separator}/>
-            <DialogActions>
-                <Typography className={styles.warningText}>
-                    <Warning className={styles.warningIcon}/> {errorMessage || t('automatic-content-tags:label.dialog.bottomText')}
+
+            <DialogActions className={styles.footer}>
+                <Typography className={`${styles.hint} ${errorMessage ? styles.hintError : ''}`}>
+                    <Warning className={`${styles.hintIcon} ${errorMessage ? styles.hintIconError : ''}`}/>
+                    {errorMessage || t('automatic-content-tags:label.dialog.bottomText')}
                 </Typography>
-                <Button
-                    size="big"
-                    color="default"
-                    label={t('automatic-content-tags:label.dialog.btnCancel')}
-                    onClick={handleCancel}
-                />
-                <Button
-                    size="big"
-                    color="accent"
-                    label={t('automatic-content-tags:label.dialog.btnApply')}
-                    disabled={isApplyDisabled}
-                    onClick={handleClick}
-                />
+                <div className={styles.actions}>
+                    <Button
+                        size="big"
+                        color="default"
+                        label={t('automatic-content-tags:label.dialog.btnCancel')}
+                        onClick={handleCancel}
+                    />
+                    <Button
+                        size="big"
+                        color="accent"
+                        label={t('automatic-content-tags:label.dialog.btnApply')}
+                        disabled={isApplyDisabled}
+                        onClick={handleClick}
+                    />
+                </div>
             </DialogActions>
         </Dialog>
     );

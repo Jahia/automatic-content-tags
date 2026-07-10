@@ -9,6 +9,7 @@
             "defaultValue": "Non sélectionné",
             "dialogSubTitle": "Utiliser le fournisseur d'IA configuré pour générer automatiquement des tags pour le contenu courant.",
             "listLabel": "Sélectionner la langue des tags",
+            "generating": "Génération des tags…",
             "noTags": "Aucun tag n'a pu être généré pour ce contenu. Seul le contenu enregistré est analysé.",
             "error": "La génération des tags a échoué. Consultez le journal du serveur."
         }
