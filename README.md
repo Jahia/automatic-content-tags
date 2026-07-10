@@ -2,6 +2,16 @@
 
 This module is a Jahia UI extension for the Content Editor. It generates semantic tags for content using a configurable LLM provider: **Anthropic**, **OpenAI** or **DeepSeek**.
 
+Compatible with Jahia 8.2. Requires Java 17 to build.
+
+## Supported providers
+
+| `llm.provider` | API | Default model | Auth |
+|---|---|---|---|
+| `anthropic` | Messages API (`/v1/messages`) | `claude-sonnet-4-6` | `x-api-key` |
+| `openai` | Chat Completions (`/v1/chat/completions`) | `gpt-5-mini` | Bearer token |
+| `deepseek` | Chat Completions (`/v1/chat/completions`) | `deepseek-chat` | Bearer token |
+
 ## Features
 
 - **Content Editor integration**: adds an "Auto Tagging" action to the Content Editor 3-dots menu.
@@ -76,6 +86,13 @@ anthropic.api.key=sk-ant-...
 - Frontend: React 18 (see `src/javascript/AutoTags/`), built with Webpack/Module Federation.
 - Backend: Java 17 OSGi Declarative Services (see `src/main/java/org/jahia/se/modules/contenttags/`).
 
+Build with Java 17 (`JAVA_HOME` must point at a JDK 17). The `frontend-maven-plugin`
+runs the Webpack build during `mvn install`.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
-MIT License
+Licensed under the [MIT License](LICENSE).
