@@ -116,8 +116,6 @@
                     <instructions>
                         <Jahia-Depends>default</Jahia-Depends>
                         <Jahia-Static-Resources>/css,/fonts,/javascript,/icons,/img</Jahia-Static-Resources>
-
-                        <Jahia-Static-Resources>/javascript</Jahia-Static-Resources>
                         <_dsannotations>*</_dsannotations>
                     </instructions>
                 </configuration>
