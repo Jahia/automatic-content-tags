@@ -51,9 +51,9 @@
         </dependency>
     </dependencies>
     <scm>
-        <connection>scm:git:git@github.com:smonier/automatic-content-tags.git</connection>
-        <developerConnection>scm:git:git@github.com:smonier/automatic-content-tags.git</developerConnection>
-        <url>https://github.com/smonier/automatic-content-tags</url>
+        <connection>scm:git:git@github.com:Jahia/automatic-content-tags.git</connection>
+        <developerConnection>scm:git:git@github.com:Jahia/automatic-content-tags.git</developerConnection>
+        <url>https://github.com/Jahia/automatic-content-tags</url>
         <tag>HEAD</tag>
     </scm>
     <properties>
