@@ -36,8 +36,21 @@
     <name>Automatic Content Tags</name>
     <version>1.0.1-SNAPSHOT</version>
     <packaging>bundle</packaging>
-    <description>Jahia Content Editor UI extension that generates content tags with a configurable LLM provider (Anthropic, OpenAI or DeepSeek).</description>
+    <description>Jahia Content Editor UI extension that generates content tags through the platform GenAI connector.</description>
     <dependencies>
+        <!-- Platform GenAI connector: the exported GenAiService API (provided by the genai-connector bundle at runtime). -->
+        <dependency>
+            <groupId>org.jahia.modules</groupId>
+            <artifactId>genai-connector</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <dependency>
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
@@ -57,7 +70,7 @@
         <tag>HEAD</tag>
     </scm>
     <properties>
-        <jahia-depends>default</jahia-depends>
+        <jahia-depends>default,genai-connector</jahia-depends>
         <yarn.arguments>build:production</yarn.arguments>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
@@ -114,7 +127,7 @@
                 <extensions>true</extensions>
                 <configuration>
                     <instructions>
-                        <Jahia-Depends>default</Jahia-Depends>
+                        <Jahia-Depends>default,genai-connector</Jahia-Depends>
                         <Jahia-Static-Resources>/css,/fonts,/javascript,/icons,/img</Jahia-Static-Resources>
                         <_dsannotations>*</_dsannotations>
                     </instructions>
