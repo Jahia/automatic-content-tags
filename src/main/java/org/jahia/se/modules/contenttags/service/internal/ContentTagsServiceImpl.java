@@ -18,6 +18,7 @@ import javax.jcr.Property;
 import javax.jcr.PropertyIterator;
 import javax.jcr.PropertyType;
 import javax.jcr.RepositoryException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Dictionary;
 import java.util.List;
@@ -41,11 +42,15 @@ public class ContentTagsServiceImpl implements ContentTagsService, ManagedServic
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ContentTagsServiceImpl.class);
 
+    // Style-only guidance; the tag count and language are injected authoritatively by the service.
     private static final String DEFAULT_PROMPT =
-            "Generate between 5 and 10 relevant tags for the following text. "
-                    + "Respond ONLY with a JSON array of strings, without markdown or explanations.";
+            "Respond ONLY with a JSON array of concise single- or two-word strings, "
+                    + "without markdown, explanations or duplicates.";
     private static final int DEFAULT_MAX_TOKENS = 1024;
     private static final int DEFAULT_MAX_SOURCE_CHARS = 6000;
+    private static final int DEFAULT_TAG_COUNT = 5;
+    private static final int MIN_TAG_COUNT = 1;
+    private static final int MAX_TAG_COUNT = 20;
 
     private final Map<String, LlmProvider> providers = new ConcurrentHashMap<>();
     private volatile Config config = Config.empty();
@@ -61,7 +66,7 @@ public class ContentTagsServiceImpl implements ContentTagsService, ManagedServic
     }
 
     @Override
-    public List<String> generateTags(JCRNodeWrapper node, String tagLanguage) {
+    public List<String> generateTags(JCRNodeWrapper node, String tagLanguage, int numberOfTags) {
         Config cfg = config;
         LlmProvider provider = providers.get(cfg.providerName());
         if (provider == null) {
@@ -74,18 +79,26 @@ public class ContentTagsServiceImpl implements ContentTagsService, ManagedServic
                     + cfg.providerName() + ".api.key in org.jahia.se.modules.contenttags.cfg");
         }
 
+        int count = clampCount(numberOfTags, cfg.tagCountDefault());
+
         String text = extractText(node, cfg.maxSourceChars());
         if (text.isEmpty()) {
             LOGGER.debug("No internationalized text found on node {}", node.getPath());
             return Collections.emptyList();
         }
 
-        String prompt = cfg.prompt() + " Generate the tags in " + tagLanguage + ". Text: " + text;
-        LOGGER.debug("Requesting tags from provider '{}' (model {}) for node {}",
-                provider.getName(), settings.model(), node.getPath());
+        // The count and language are authoritative here, so the configurable prompt only has to
+        // carry style guidance (and must not hardcode a number).
+        String prompt = "Generate exactly " + count + " relevant tags, in " + tagLanguage
+                + ", for the following content. " + cfg.prompt() + " Content: " + text;
+        LOGGER.debug("Requesting {} tags from provider '{}' (model {}) for node {}",
+                count, provider.getName(), settings.model(), node.getPath());
         try {
             String rawResponse = provider.complete(prompt, settings);
             List<String> tags = TagResponseParser.parse(rawResponse);
+            if (tags.size() > count) {
+                tags = new ArrayList<>(tags.subList(0, count));
+            }
             LOGGER.debug("Provider '{}' returned {} tags for node {}", provider.getName(), tags.size(), node.getPath());
             return tags;
         } catch (InterruptedException e) {
@@ -95,6 +108,11 @@ public class ContentTagsServiceImpl implements ContentTagsService, ManagedServic
             throw new IllegalStateException("Call to LLM provider '" + provider.getName() + "' failed for node "
                     + node.getPath(), e);
         }
+    }
+
+    private static int clampCount(int requested, int configuredDefault) {
+        int count = requested > 0 ? requested : configuredDefault;
+        return Math.max(MIN_TAG_COUNT, Math.min(MAX_TAG_COUNT, count));
     }
 
     /**
@@ -138,6 +156,7 @@ public class ContentTagsServiceImpl implements ContentTagsService, ManagedServic
         String prompt = string(properties, "llm.user.prompt", DEFAULT_PROMPT);
         int maxTokens = integer(properties, "llm.max.tokens", DEFAULT_MAX_TOKENS);
         int maxSourceChars = integer(properties, "llm.max.source.chars", DEFAULT_MAX_SOURCE_CHARS);
+        int tagCountDefault = integer(properties, "llm.tag.count.default", DEFAULT_TAG_COUNT);
         Double temperature = decimal(properties, "llm.temperature");
 
         Map<String, LlmSettings> settings = Map.of(
@@ -148,7 +167,7 @@ public class ContentTagsServiceImpl implements ContentTagsService, ManagedServic
                 "deepseek", providerSettings(properties, "deepseek", "https://api.deepseek.com",
                         "deepseek-chat", maxTokens, temperature));
 
-        config = new Config(providerName, prompt, maxSourceChars, settings);
+        config = new Config(providerName, prompt, maxSourceChars, tagCountDefault, settings);
 
         LlmSettings active = settings.get(providerName);
         if (active == null) {
@@ -206,10 +225,10 @@ public class ContentTagsServiceImpl implements ContentTagsService, ManagedServic
     /**
      * Immutable configuration snapshot.
      */
-    private record Config(String providerName, String prompt, int maxSourceChars,
+    private record Config(String providerName, String prompt, int maxSourceChars, int tagCountDefault,
                           Map<String, LlmSettings> settings) {
         static Config empty() {
-            return new Config("anthropic", DEFAULT_PROMPT, DEFAULT_MAX_SOURCE_CHARS, Map.of());
+            return new Config("anthropic", DEFAULT_PROMPT, DEFAULT_MAX_SOURCE_CHARS, DEFAULT_TAG_COUNT, Map.of());
         }
     }
 }

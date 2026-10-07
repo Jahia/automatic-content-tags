@@ -24,8 +24,9 @@ import java.util.Map;
  * Render action called by the Content Editor dialog to generate tags for the current node.
  *
  * <p>Endpoint: {@code POST /cms/editframe/default/{lang}{path}.generateContentTagsAction.do}
- * with a {@code tagLanguage} parameter. Requires an authenticated user with write permission
- * on the target node; the node is read through the caller's session.</p>
+ * with a required {@code tagLanguage} parameter and an optional {@code numberOfTags} parameter.
+ * Requires an authenticated user with write permission on the target node; the node is read
+ * through the caller's session.</p>
  */
 @Component(service = Action.class, immediate = true)
 public class GenerateContentTagsAction extends Action {
@@ -58,14 +59,32 @@ public class GenerateContentTagsAction extends Action {
             return new ActionResult(HttpServletResponse.SC_BAD_REQUEST, null, error);
         }
 
+        int numberOfTags = parseInt(getParameter(parameters, "numberOfTags"));
+
         try {
-            List<String> tags = contentTagsService.generateTags(resource.getNode(), tagLanguage);
+            List<String> tags = contentTagsService.generateTags(resource.getNode(), tagLanguage, numberOfTags);
             JSONObject result = new JSONObject().put("tags", new JSONArray(tags));
             return new ActionResult(HttpServletResponse.SC_OK, null, result);
         } catch (Exception e) {
             LOGGER.error("Tag generation failed for node {}", resource.getNode().getPath(), e);
             JSONObject error = new JSONObject().put("error", "Tag generation failed, see server log");
             return new ActionResult(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, null, error);
+        }
+    }
+
+    /**
+     * @param value the raw parameter value
+     * @return the parsed positive integer, or {@code 0} when absent or not a number — the service
+     *         treats {@code 0} as "use the configured default"
+     */
+    private static int parseInt(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 }

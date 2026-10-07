@@ -30,6 +30,7 @@ It is built to Jahia's security and integration standards: the action is POST-on
 - One-click **Auto Tagging** action in the Content Editor 3-dots menu.
 - **Choose your AI provider** — Anthropic, OpenAI or DeepSeek — with one config key. Model, endpoint, token limit, temperature and prompt are all configurable per provider.
 - **Pick the tag language** at generation time, independently of the content language.
+- **Choose how many tags** (1-20) and whether to **replace** the existing tags or **add to** them, right in the dialog.
 - Tags are written to Jahia's standard tagging field (`j:tagList`), so they work with existing facets, queries and tag-based navigation.
 - The action appears only on taggable content and only when the module is enabled on the site.
 - **English and French** user interface.
@@ -61,11 +62,13 @@ It is built to Jahia's security and integration standards: the action is POST-on
    #deepseek.model=deepseek-chat
    #llm.max.tokens=1024
    #llm.max.source.chars=6000
-   #llm.user.prompt=Generate between 5 and 10 relevant tags for the following text. Respond ONLY with a JSON array of strings, without markdown or explanations.
+   #llm.tag.count.default=5
+   # Style guidance only — the tag count and language come from the dialog.
+   #llm.user.prompt=Respond ONLY with a JSON array of concise single- or two-word strings, without markdown, explanations or duplicates.
    ```
 
    The configuration is picked up automatically — no restart needed.
-4. **Use it.** Open a content item in the Content Editor, open the 3-dots menu, click **Auto Tagging**, choose the tag language and click **Apply**. Save the content to persist the generated tags.
+4. **Use it.** Open a content item in the Content Editor, open the 3-dots menu, click **Auto Tagging**, choose the tag language, the number of tags and whether to replace or add to existing tags, then click **Apply**. Save the content to persist the generated tags.
 
 > Never commit a real API key to source control. The configuration shipped inside the module contains empty keys on purpose.
 
@@ -90,10 +93,10 @@ No. Tags are generated from the last saved version of the content. Save your edi
 In Jahia's standard tag list (`j:tagList` via the `jmix:tagged` mixin), so they integrate with existing tag facets, queries and navigation.
 
 **Does it replace existing tags?**
-Yes. Applying generated tags replaces the current tag list for the item.
+Your choice. The dialog has a **"Replace existing tags"** checkbox — checked replaces the current tag list, unchecked adds the generated tags to it (duplicates are removed).
 
-**Can I control how many tags are generated, or the wording?**
-Yes. Edit `llm.user.prompt` (and `llm.max.tokens`) in the configuration file to change the instruction sent to the model.
+**Can I control how many tags are generated?**
+Yes. Set the **number of tags** (1-20) in the dialog on each run; the default is configurable with `llm.tag.count.default`. To tune the *style* of the tags, edit `llm.user.prompt` — but leave the count and language to the dialog, which the module injects authoritatively.
 
 **In which language are the tags generated?**
 You choose the tag language in the dialog at generation time; it is independent of the content's edit language.

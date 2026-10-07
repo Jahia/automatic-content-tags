@@ -17,6 +17,7 @@ Compatible with Jahia 8.2. Requires Java 17 to build.
 - **Content Editor integration**: adds an "Auto Tagging" action to the Content Editor 3-dots menu.
 - **LLM-agnostic**: one OSGi configuration key switches between Anthropic (Messages API), OpenAI and DeepSeek (Chat Completions API). New providers can be added by registering an `LlmProvider` OSGi service.
 - **AI-powered tagging**: extracts the internationalized text of the selected JCR node (through the calling user's session) and asks the model for relevant tags in the language chosen by the editor.
+- **Editor controls**: choose the **number of tags** (1-20, default 5) and whether to **replace** the existing tags or **add to** them, directly in the dialog.
 - **Automatic tag field update**: fills `jmix:tagged` / `j:tagList` with the generated tags in the open editor form.
 - **No embedded SDKs**: providers are called over plain HTTPS with the JDK HTTP client - no vendor SDK jars in the bundle.
 
@@ -60,17 +61,28 @@ anthropic.api.key=sk-ant-...
 #deepseek.model=deepseek-chat
 #llm.max.tokens=1024
 #llm.max.source.chars=6000
-#llm.user.prompt=Generate between 5 and 10 relevant tags for the following text. Respond ONLY with a JSON array of strings, without markdown or explanations.
+
+# Default number of tags when the dialog does not specify one (1-20).
+#llm.tag.count.default=5
+
+# Style guidance only. The number of tags (from the dialog) and the tag language are
+# injected by the module, so do NOT hardcode a number or a language in this prompt.
+#llm.user.prompt=Respond ONLY with a JSON array of concise single- or two-word strings, without markdown, explanations or duplicates.
 ```
 
 **Never commit an API key to source control.** The `.cfg` shipped inside the bundle contains empty keys on purpose.
+
+> The number of tags and the tag language come from the dialog on every request and are injected
+> authoritatively by the module. Keep `llm.user.prompt` to style guidance only — a hardcoded count
+> or language there will conflict with the request.
 
 ## Usage
 
 1. Open a content item in the Content Editor.
 2. Open the 3-dots menu and click **Auto Tagging**.
-3. Select the language the tags should be generated in and click **Apply**.
-4. The tag field of the content is filled with the generated tags; save to persist them.
+3. Select the tag language, set how many tags you want (default 5), and choose whether to
+   **replace existing tags** (checked) or **add to them** (unchecked).
+4. Click **Apply**. The tag field is filled with the generated tags; save to persist them.
 
 > Note: tags are generated from the **saved** content of the node. Unsaved edits in the open
 > editor form are not analysed - save first, then generate tags.

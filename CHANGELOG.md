@@ -4,6 +4,21 @@ All notable changes to this module are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Dialog control to choose the **number of tags** to generate (1-20, default 5).
+- Dialog **"Replace existing tags"** checkbox: when checked the generated tags replace the
+  current tag list (previous behaviour); when unchecked they are merged into it (deduplicated).
+- Configuration key `llm.tag.count.default` (default 5) for the fallback tag count.
+
+### Changed
+- The tag **count and language are now injected authoritatively** by the module on every
+  request, so `llm.user.prompt` is style guidance only and must no longer hardcode a number.
+  The shipped default prompt was updated accordingly.
+- `ContentTagsService.generateTags` now takes a `numberOfTags` argument; the action accepts an
+  optional `numberOfTags` request parameter.
+
 ## [1.0.0] - 2026-07-10
 
 Initial release. Successor of the `anthropic-tags` module, rebuilt LLM-agnostic

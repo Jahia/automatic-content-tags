@@ -1,9 +1,33 @@
 import React, {useState} from 'react';
 import {Dialog} from '@material-ui/core';
-import {Button, Dropdown, Loader, Tag, Typography, Warning} from '@jahia/moonstone';
+import {Button, Checkbox, Dropdown, Input, Loader, Tag, Typography, Warning} from '@jahia/moonstone';
 import PropTypes from 'prop-types';
 import {useTranslation} from 'react-i18next';
 import styles from './AutoTagsDialog.scss';
+
+const DEFAULT_TAG_COUNT = 5;
+const MIN_TAG_COUNT = 1;
+const MAX_TAG_COUNT = 20;
+const TAG_LIST_FIELD = 'jmix:tagged_j:tagList';
+
+const clampCount = value => {
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) {
+        return DEFAULT_TAG_COUNT;
+    }
+
+    return Math.min(MAX_TAG_COUNT, Math.max(MIN_TAG_COUNT, parsed));
+};
+
+const mergeTags = (existing, generated) => {
+    const merged = (Array.isArray(existing) ? existing : []).filter(tag => typeof tag === 'string');
+    generated.forEach(tag => {
+        if (!merged.some(current => current.toLowerCase() === tag.toLowerCase())) {
+            merged.push(tag);
+        }
+    });
+    return merged;
+};
 
 export const AutoTagsDialog = ({
     availableLanguages,
@@ -21,6 +45,8 @@ export const AutoTagsDialog = ({
     };
 
     const [currentOption, setCurrentOption] = useState(defaultOption);
+    const [tagCount, setTagCount] = useState(String(DEFAULT_TAG_COUNT));
+    const [replaceExisting, setReplaceExisting] = useState(true);
     const [loadingQuery, setLoadingQuery] = useState(false);
     const [errorMessage, setErrorMessage] = useState(null);
 
@@ -37,8 +63,10 @@ export const AutoTagsDialog = ({
         setLoadingQuery(true);
         setErrorMessage(null);
         try {
+            const count = clampCount(tagCount);
             const formData = new FormData();
             formData.append('tagLanguage', currentOption.label);
+            formData.append('numberOfTags', String(count));
 
             const contextPath = window.contextJsParameters?.contextPath || '';
             const response = await fetch(`${contextPath}/cms/editframe/default/${langLocale}${path}.generateContentTagsAction.do`, {
@@ -53,8 +81,11 @@ export const AutoTagsDialog = ({
 
             const results = await response.json();
             if (Array.isArray(results.tags) && results.tags.length > 0) {
+                const nextTags = replaceExisting ?
+                    results.tags :
+                    mergeTags(formik.values?.[TAG_LIST_FIELD], results.tags);
                 await formik.setFieldValue('jmix:tagged', true);
-                await formik.setFieldValue('jmix:tagged_j:tagList', results.tags);
+                await formik.setFieldValue(TAG_LIST_FIELD, nextTags);
                 onCloseDialog();
             } else {
                 setErrorMessage(t('automatic-content-tags:label.dialog.noTags'));
@@ -68,6 +99,9 @@ export const AutoTagsDialog = ({
     };
 
     const isApplyDisabled = defaultOption.value === currentOption.value || loadingQuery;
+    const hintText = replaceExisting ?
+        t('automatic-content-tags:label.dialog.bottomTextReplace') :
+        t('automatic-content-tags:label.dialog.bottomTextAppend');
 
     return (
         <Dialog fullWidth
@@ -99,24 +133,55 @@ export const AutoTagsDialog = ({
             <div className={styles.separator}/>
 
             <div className={styles.content}>
-                <label className={styles.field} style={{display: 'flex', flexDirection: 'column', gap: 8}}>
-                    <Typography variant="subheading" weight="bold" className={styles.fieldLabel}>
-                        {t('automatic-content-tags:label.dialog.listLabel')}
-                    </Typography>
-                    <Dropdown
-                        className={styles.dropdown}
-                        label={currentOption.label}
-                        value={currentOption.value}
-                        size="medium"
+                <div className={styles.optionsRow} style={{display: 'flex', alignItems: 'flex-end', gap: 24}}>
+                    <label className={styles.field} style={{display: 'flex', flexDirection: 'column', gap: 8, flexGrow: 1}}>
+                        <Typography variant="subheading" weight="bold" className={styles.fieldLabel}>
+                            {t('automatic-content-tags:label.dialog.listLabel')}
+                        </Typography>
+                        <Dropdown
+                            className={styles.dropdown}
+                            label={currentOption.label}
+                            value={currentOption.value}
+                            size="medium"
+                            isDisabled={loadingQuery}
+                            data={[defaultOption].concat(availableLanguages.map(element => {
+                                return {
+                                    value: element.language,
+                                    label: element.displayName
+                                };
+                            }))}
+                            onChange={handleOnChange}
+                        />
+                    </label>
+                    <label className={styles.field} style={{display: 'flex', flexDirection: 'column', gap: 8}}>
+                        <Typography variant="subheading" weight="bold" className={styles.fieldLabel}>
+                            {t('automatic-content-tags:label.dialog.countLabel')}
+                        </Typography>
+                        <Input
+                            className={styles.countInput}
+                            type="number"
+                            min={MIN_TAG_COUNT}
+                            max={MAX_TAG_COUNT}
+                            size="medium"
+                            value={tagCount}
+                            isDisabled={loadingQuery}
+                            onChange={e => setTagCount(e.target.value)}
+                            onBlur={() => setTagCount(String(clampCount(tagCount)))}
+                        />
+                    </label>
+                </div>
+
+                <label className={styles.checkboxRow}
+                       style={{display: 'flex', alignItems: 'center', gap: 8, marginTop: 20, cursor: 'pointer'}}
+                >
+                    <Checkbox
+                        checked={replaceExisting}
                         isDisabled={loadingQuery}
-                        data={[defaultOption].concat(availableLanguages.map(element => {
-                            return {
-                                value: element.language,
-                                label: element.displayName
-                            };
-                        }))}
-                        onChange={handleOnChange}
+                        onChange={(e, value, checked) => setReplaceExisting(checked)}
                     />
+                    <Typography variant="body" className={styles.checkboxLabel}>
+                        {t('automatic-content-tags:label.dialog.replaceLabel')}
+                    </Typography>
                 </label>
             </div>
 
@@ -135,7 +200,7 @@ export const AutoTagsDialog = ({
                     ) : (
                         <>
                             <Warning className={`${styles.hintIcon} ${errorMessage ? styles.hintIconError : ''}`}/>
-                            {errorMessage || t('automatic-content-tags:label.dialog.bottomText')}
+                            {errorMessage || hintText}
                         </>
                     )}
                 </Typography>

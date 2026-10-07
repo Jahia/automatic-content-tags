@@ -3,12 +3,15 @@
         "title": "Auto Tagging",
         "dialog": {
             "dialogTitle": "AI Auto Tagging",
-            "bottomText": "Clicking \"APPLY\" replaces all existing tags with the generated ones.",
+            "bottomTextReplace": "Clicking \"APPLY\" replaces all existing tags with the generated ones.",
+            "bottomTextAppend": "Clicking \"APPLY\" adds the generated tags to the existing ones.",
             "btnApply": "Apply",
             "btnCancel": "Cancel",
             "defaultValue": "Unselected",
             "dialogSubTitle": "Use the configured AI provider to automatically generate tags for the current content item based on its content.",
             "listLabel": "Select Tag Language",
+            "countLabel": "Number of tags",
+            "replaceLabel": "Replace existing tags",
             "generating": "Generating tags…",
             "noTags": "No tags could be generated for this content. Note that only saved content is analysed.",
             "error": "Tag generation failed. Check the server log for details."
