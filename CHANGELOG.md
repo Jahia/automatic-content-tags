@@ -7,10 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- Dialog control to choose the **number of tags** to generate (1-20, default 5).
+- Dialog control to choose the **number of tags** to generate (default 5).
 - Dialog **"Replace existing tags"** checkbox: when checked the generated tags replace the
   current tag list (previous behaviour); when unchecked they are merged into it (deduplicated).
 - Configuration key `llm.tag.count.default` (default 5) for the fallback tag count.
+- Configuration key `llm.tag.count.max` (default 20, hard-capped at 50) — the enforced ceiling
+  on how many tags a request may generate; the requested count is clamped to it server-side.
 
 ### Changed
 - The tag **count and language are now injected authoritatively** by the module on every

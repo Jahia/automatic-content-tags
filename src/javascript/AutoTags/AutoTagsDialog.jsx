@@ -7,7 +7,9 @@ import styles from './AutoTagsDialog.scss';
 
 const DEFAULT_TAG_COUNT = 5;
 const MIN_TAG_COUNT = 1;
-const MAX_TAG_COUNT = 20;
+// UI sanity ceiling matching the module's absolute max; the enforced ceiling is the
+// server's llm.tag.count.max configuration, applied authoritatively on every request.
+const MAX_TAG_COUNT = 50;
 const TAG_LIST_FIELD = 'jmix:tagged_j:tagList';
 
 const clampCount = value => {

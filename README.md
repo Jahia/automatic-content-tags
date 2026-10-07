@@ -17,7 +17,7 @@ Compatible with Jahia 8.2. Requires Java 17 to build.
 - **Content Editor integration**: adds an "Auto Tagging" action to the Content Editor 3-dots menu.
 - **LLM-agnostic**: one OSGi configuration key switches between Anthropic (Messages API), OpenAI and DeepSeek (Chat Completions API). New providers can be added by registering an `LlmProvider` OSGi service.
 - **AI-powered tagging**: extracts the internationalized text of the selected JCR node (through the calling user's session) and asks the model for relevant tags in the language chosen by the editor.
-- **Editor controls**: choose the **number of tags** (1-20, default 5) and whether to **replace** the existing tags or **add to** them, directly in the dialog.
+- **Editor controls**: choose the **number of tags** (default 5, up to the admin-configured `llm.tag.count.max`) and whether to **replace** the existing tags or **add to** them, directly in the dialog.
 - **Automatic tag field update**: fills `jmix:tagged` / `j:tagList` with the generated tags in the open editor form.
 - **No embedded SDKs**: providers are called over plain HTTPS with the JDK HTTP client - no vendor SDK jars in the bundle.
 
@@ -62,7 +62,10 @@ anthropic.api.key=sk-ant-...
 #llm.max.tokens=1024
 #llm.max.source.chars=6000
 
-# Default number of tags when the dialog does not specify one (1-20).
+# Maximum number of tags a request may generate (hard-capped at 50). Users cannot exceed this.
+#llm.tag.count.max=20
+
+# Default number of tags when the dialog does not specify one (clamped to llm.tag.count.max).
 #llm.tag.count.default=5
 
 # Style guidance only. The number of tags (from the dialog) and the tag language are

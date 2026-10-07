@@ -14,7 +14,6 @@ import java.util.List;
  */
 final class TagResponseParser {
 
-    private static final int MAX_TAGS = 20;
     private static final int MAX_TAG_LENGTH = 64;
 
     private TagResponseParser() {
@@ -22,9 +21,11 @@ final class TagResponseParser {
 
     /**
      * @param rawResponse the raw assistant text
-     * @return the extracted tags, deduplicated and length-capped; empty when nothing parses
+     * @param maxTags     the maximum number of tags to keep (the model may over-generate)
+     * @return the extracted tags, deduplicated, length-capped and limited to {@code maxTags};
+     *         empty when nothing parses
      */
-    static List<String> parse(String rawResponse) {
+    static List<String> parse(String rawResponse, int maxTags) {
         if (rawResponse == null || rawResponse.isBlank()) {
             return List.of();
         }
@@ -37,21 +38,21 @@ final class TagResponseParser {
         try {
             JSONArray array = new JSONArray(cleaned);
             for (int i = 0; i < array.length(); i++) {
-                addTag(tags, array.optString(i, ""));
+                addTag(tags, array.optString(i, ""), maxTags);
             }
         } catch (JSONException e) {
             // Fall back to comma-separated text
             for (String candidate : cleaned.split(",")) {
                 String tag = candidate.replaceAll("^[\\[\"\\s]+|[\\]\"\\s]+$", "");
-                addTag(tags, tag);
+                addTag(tags, tag, maxTags);
             }
         }
         return tags;
     }
 
-    private static void addTag(List<String> tags, String candidate) {
+    private static void addTag(List<String> tags, String candidate, int maxTags) {
         String tag = candidate == null ? "" : candidate.trim();
-        if (tag.isEmpty() || tags.contains(tag) || tags.size() >= MAX_TAGS) {
+        if (tag.isEmpty() || tags.contains(tag) || tags.size() >= maxTags) {
             return;
         }
         if (tag.length() > MAX_TAG_LENGTH) {

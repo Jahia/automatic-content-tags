@@ -30,7 +30,7 @@ It is built to Jahia's security and integration standards: the action is POST-on
 - One-click **Auto Tagging** action in the Content Editor 3-dots menu.
 - **Choose your AI provider** — Anthropic, OpenAI or DeepSeek — with one config key. Model, endpoint, token limit, temperature and prompt are all configurable per provider.
 - **Pick the tag language** at generation time, independently of the content language.
-- **Choose how many tags** (1-20) and whether to **replace** the existing tags or **add to** them, right in the dialog.
+- **Choose how many tags** (up to the configured maximum) and whether to **replace** the existing tags or **add to** them, right in the dialog.
 - Tags are written to Jahia's standard tagging field (`j:tagList`), so they work with existing facets, queries and tag-based navigation.
 - The action appears only on taggable content and only when the module is enabled on the site.
 - **English and French** user interface.
@@ -62,6 +62,7 @@ It is built to Jahia's security and integration standards: the action is POST-on
    #deepseek.model=deepseek-chat
    #llm.max.tokens=1024
    #llm.max.source.chars=6000
+   #llm.tag.count.max=20
    #llm.tag.count.default=5
    # Style guidance only — the tag count and language come from the dialog.
    #llm.user.prompt=Respond ONLY with a JSON array of concise single- or two-word strings, without markdown, explanations or duplicates.
@@ -96,7 +97,7 @@ In Jahia's standard tag list (`j:tagList` via the `jmix:tagged` mixin), so they 
 Your choice. The dialog has a **"Replace existing tags"** checkbox — checked replaces the current tag list, unchecked adds the generated tags to it (duplicates are removed).
 
 **Can I control how many tags are generated?**
-Yes. Set the **number of tags** (1-20) in the dialog on each run; the default is configurable with `llm.tag.count.default`. To tune the *style* of the tags, edit `llm.user.prompt` — but leave the count and language to the dialog, which the module injects authoritatively.
+Yes. Set the **number of tags** in the dialog on each run. An administrator caps the maximum with `llm.tag.count.max` (default 20, up to 50) and sets the fallback with `llm.tag.count.default`; requests are clamped to the configured maximum. To tune the *style* of the tags, edit `llm.user.prompt` — but leave the count and language to the dialog, which the module injects authoritatively.
 
 **In which language are the tags generated?**
 You choose the tag language in the dialog at generation time; it is independent of the content's edit language.
