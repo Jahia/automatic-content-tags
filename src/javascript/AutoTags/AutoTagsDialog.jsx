@@ -1,24 +1,23 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {Dialog} from '@material-ui/core';
 import {Button, Checkbox, Dropdown, Input, Loader, Tag, Typography, Warning} from '@jahia/moonstone';
 import PropTypes from 'prop-types';
 import {useTranslation} from 'react-i18next';
 import styles from './AutoTagsDialog.scss';
 
-const DEFAULT_TAG_COUNT = 5;
 const MIN_TAG_COUNT = 1;
-// UI sanity ceiling matching the module's absolute max; the enforced ceiling is the
-// server's llm.tag.count.max configuration, applied authoritatively on every request.
-const MAX_TAG_COUNT = 50;
+// Used only until the server configuration is fetched (or if that fetch fails).
+const FALLBACK_DEFAULT_TAG_COUNT = 5;
+const FALLBACK_MAX_TAG_COUNT = 20;
 const TAG_LIST_FIELD = 'jmix:tagged_j:tagList';
 
-const clampCount = value => {
+const clampCount = (value, max, fallback) => {
     const parsed = parseInt(value, 10);
     if (Number.isNaN(parsed)) {
-        return DEFAULT_TAG_COUNT;
+        return fallback;
     }
 
-    return Math.min(MAX_TAG_COUNT, Math.max(MIN_TAG_COUNT, parsed));
+    return Math.min(max, Math.max(MIN_TAG_COUNT, parsed));
 };
 
 const mergeTags = (existing, generated) => {
@@ -47,10 +46,51 @@ export const AutoTagsDialog = ({
     };
 
     const [currentOption, setCurrentOption] = useState(defaultOption);
-    const [tagCount, setTagCount] = useState(String(DEFAULT_TAG_COUNT));
+    const [maxTags, setMaxTags] = useState(FALLBACK_MAX_TAG_COUNT);
+    const [defaultTags, setDefaultTags] = useState(FALLBACK_DEFAULT_TAG_COUNT);
+    const [tagCount, setTagCount] = useState(String(FALLBACK_DEFAULT_TAG_COUNT));
     const [replaceExisting, setReplaceExisting] = useState(true);
     const [loadingQuery, setLoadingQuery] = useState(false);
     const [errorMessage, setErrorMessage] = useState(null);
+
+    const contextPath = window.contextJsParameters?.contextPath || '';
+    const actionBase = `${contextPath}/cms/editframe/default/${langLocale}${path}`;
+
+    useEffect(() => {
+        if (!isOpen) {
+            return undefined;
+        }
+
+        let active = true;
+        (async () => {
+            try {
+                const response = await fetch(`${actionBase}.contentTagsConfig.do`, {
+                    method: 'POST',
+                    headers: {Accept: 'application/json'}
+                });
+                if (!response.ok) {
+                    return;
+                }
+
+                const config = await response.json();
+                if (!active) {
+                    return;
+                }
+
+                const max = Number.isFinite(config.maxTags) ? config.maxTags : FALLBACK_MAX_TAG_COUNT;
+                const preset = Number.isFinite(config.defaultTags) ? config.defaultTags : FALLBACK_DEFAULT_TAG_COUNT;
+                setMaxTags(max);
+                setDefaultTags(preset);
+                setTagCount(String(Math.min(max, preset)));
+            } catch (error) {
+                console.error('Unable to load Auto Tagging configuration, using defaults:', error);
+            }
+        })();
+
+        return () => {
+            active = false;
+        };
+    }, [actionBase, isOpen]);
 
     const handleCancel = () => {
         onCloseDialog();
@@ -65,13 +105,12 @@ export const AutoTagsDialog = ({
         setLoadingQuery(true);
         setErrorMessage(null);
         try {
-            const count = clampCount(tagCount);
+            const count = clampCount(tagCount, maxTags, defaultTags);
             const formData = new FormData();
             formData.append('tagLanguage', currentOption.label);
             formData.append('numberOfTags', String(count));
 
-            const contextPath = window.contextJsParameters?.contextPath || '';
-            const response = await fetch(`${contextPath}/cms/editframe/default/${langLocale}${path}.generateContentTagsAction.do`, {
+            const response = await fetch(`${actionBase}.generateContentTagsAction.do`, {
                 method: 'POST',
                 headers: {Accept: 'application/json'},
                 body: formData
@@ -157,18 +196,18 @@ export const AutoTagsDialog = ({
                     </label>
                     <label className={styles.field} style={{display: 'flex', flexDirection: 'column', gap: 8}}>
                         <Typography variant="subheading" weight="bold" className={styles.fieldLabel}>
-                            {t('automatic-content-tags:label.dialog.countLabel')}
+                            {t('automatic-content-tags:label.dialog.countLabel', {max: maxTags})}
                         </Typography>
                         <Input
                             className={styles.countInput}
                             type="number"
                             min={MIN_TAG_COUNT}
-                            max={MAX_TAG_COUNT}
+                            max={maxTags}
                             size="medium"
                             value={tagCount}
                             isDisabled={loadingQuery}
                             onChange={e => setTagCount(e.target.value)}
-                            onBlur={() => setTagCount(String(clampCount(tagCount)))}
+                            onBlur={() => setTagCount(String(clampCount(tagCount, maxTags, defaultTags)))}
                         />
                     </label>
                 </div>

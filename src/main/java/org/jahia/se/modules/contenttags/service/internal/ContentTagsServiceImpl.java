@@ -108,6 +108,16 @@ public class ContentTagsServiceImpl implements ContentTagsService, ManagedServic
         }
     }
 
+    @Override
+    public int getDefaultTagCount() {
+        return config.tagCountDefault();
+    }
+
+    @Override
+    public int getMaxTagCount() {
+        return config.tagCountMax();
+    }
+
     private static int clampCount(int requested, int configuredDefault, int configuredMax) {
         int count = requested > 0 ? requested : configuredDefault;
         return Math.max(MIN_TAG_COUNT, Math.min(configuredMax, count));

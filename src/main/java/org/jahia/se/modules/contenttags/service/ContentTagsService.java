@@ -26,4 +26,15 @@ public interface ContentTagsService {
      *                               has no API key, or the provider call fails
      */
     List<String> generateTags(JCRNodeWrapper node, String tagLanguage, int numberOfTags);
+
+    /**
+     * @return the default number of tags used when a request does not specify one
+     */
+    int getDefaultTagCount();
+
+    /**
+     * @return the maximum number of tags a request may generate; the editor UI uses this as the
+     *         input ceiling and the service enforces it on every request
+     */
+    int getMaxTagCount();
 }

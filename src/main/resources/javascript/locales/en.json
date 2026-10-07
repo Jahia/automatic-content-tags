@@ -10,7 +10,7 @@
             "defaultValue": "Unselected",
             "dialogSubTitle": "Use the configured AI provider to automatically generate tags for the current content item based on its content.",
             "listLabel": "Select Tag Language",
-            "countLabel": "Number of tags",
+            "countLabel": "Number of tags (max {{max}})",
             "replaceLabel": "Replace existing tags",
             "generating": "Generating tags…",
             "noTags": "No tags could be generated for this content. Note that only saved content is analysed.",

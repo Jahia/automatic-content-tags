@@ -10,7 +10,7 @@
             "defaultValue": "Non sélectionné",
             "dialogSubTitle": "Utiliser le fournisseur d'IA configuré pour générer automatiquement des tags pour le contenu courant.",
             "listLabel": "Sélectionner la langue des tags",
-            "countLabel": "Nombre de tags",
+            "countLabel": "Nombre de tags (max {{max}})",
             "replaceLabel": "Remplacer les tags existants",
             "generating": "Génération des tags…",
             "noTags": "Aucun tag n'a pu être généré pour ce contenu. Seul le contenu enregistré est analysé.",
