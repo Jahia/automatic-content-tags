@@ -34,10 +34,30 @@
     <groupId>org.jahia.se.modules</groupId>
     <artifactId>automatic-content-tags</artifactId>
     <name>Automatic Content Tags</name>
-    <version>1.0.2-SNAPSHOT</version>
+    <version>2.0.0-SNAPSHOT</version>
     <packaging>bundle</packaging>
-    <description>Jahia Content Editor UI extension that generates content tags with a configurable LLM provider (Anthropic, OpenAI or DeepSeek).</description>
+    <description>Generates content tags and image alternative text through genai-connector: a Content Editor action for tags, and a GraphQL mutation that fills jahia_alt on images.</description>
     <dependencies>
+        <!-- The LLM access of the module. No release exists yet: mvn install genai-connector first. -->
+        <dependency>
+            <groupId>org.jahia.modules</groupId>
+            <artifactId>genai-connector</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.jahia.modules</groupId>
+            <artifactId>graphql-dxm-provider</artifactId>
+            <version>3.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <!-- The GraphQL annotations; graphql-dxm-provider exports them at runtime but keeps them provided. -->
+        <dependency>
+            <groupId>io.github.graphql-java</groupId>
+            <artifactId>graphql-java-annotations</artifactId>
+            <version>21.1</version>
+            <scope>provided</scope>
+        </dependency>
         <dependency>
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
@@ -49,6 +69,18 @@
             <version>1.7.36</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>5.11.0</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     <scm>
         <connection>scm:git:git@github.com:Jahia/automatic-content-tags.git</connection>
@@ -57,7 +89,7 @@
         <tag>HEAD</tag>
     </scm>
     <properties>
-        <jahia-depends>default</jahia-depends>
+        <jahia-depends>default,genai-connector,graphql-dxm-provider</jahia-depends>
         <yarn.arguments>build:production</yarn.arguments>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
@@ -114,7 +146,7 @@
                 <extensions>true</extensions>
                 <configuration>
                     <instructions>
-                        <Jahia-Depends>default</Jahia-Depends>
+                        <Jahia-Depends>default,genai-connector,graphql-dxm-provider</Jahia-Depends>
                         <Jahia-Static-Resources>/css,/fonts,/javascript,/icons,/img</Jahia-Static-Resources>
                         <_dsannotations>*</_dsannotations>
                     </instructions>

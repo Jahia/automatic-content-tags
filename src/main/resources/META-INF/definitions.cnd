@@ -1,0 +1,11 @@
+<jmix = 'http://www.jahia.org/jahia/mix/1.0'>
+
+// The alternative text of an image. Extending jmix:image makes it available on every image, where
+// the Content Editor shows it as an optional section. The generateImageAltText GraphQL mutation adds
+// the mixin and fills the property.
+// Never put a hyphen in a property name here: Jahia stores this file re-serialized without quotes in
+// its definitions table, and a node that loads it from there reads the hyphen as a new property.
+[jmix:jahiaAlt] mixin
+ extends = jmix:image
+ itemtype = content
+ - jahia_alt (string, textarea) i18n

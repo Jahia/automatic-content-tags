@@ -4,6 +4,30 @@ All notable changes to this module are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - Unreleased
+
+### Added
+- Alternative text of images. The mixin `jmix:jahiaAlt` extends `jmix:image` with the i18n
+  property `jahia_alt`, and the GraphQL mutation `generateImageAltText(path, language,
+  includeSubNodes, overwrite)` fills it with a vision model, for one image or for every image below
+  a path. It runs under the caller's session, saves each image on its own, skips an image that
+  already has a text unless `overwrite` is set, and reports one result per image.
+- Configuration keys `alt.tier`, `alt.max.length`, `alt.max.images`, `alt.max.image.bytes`,
+  `alt.max.tokens` and `alt.prompt`.
+- Configuration key `llm.tier`, the genai-connector tier of the tags (default `lite`).
+- Unit tests (JUnit 5, Mockito).
+
+### Changed
+- **Breaking**: the module calls its models through genai-connector, which is now a required
+  dependency. The provider, the model and the API key are configured in genai-connector. The keys
+  `llm.provider` and `anthropic.*`, `openai.*`, `deepseek.*` are no longer read.
+- The tagging action answers HTTP 503 when genai-connector has no model for the tier, and HTTP 429
+  when the user reached its rate limit.
+
+### Removed
+- **Breaking**: the built-in Anthropic, OpenAI and DeepSeek providers and the exported
+  `org.jahia.se.modules.contenttags.service.spi` package (`LlmProvider`, `LlmSettings`).
+
 ## [1.0.1] - 2026-10-07
 
 ### Added
