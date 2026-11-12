@@ -2,6 +2,8 @@ package org.jahia.se.modules.contenttags.actions;
 
 import org.jahia.bin.Action;
 import org.jahia.bin.ActionResult;
+import org.jahia.modules.genai.api.GenAiNotConfiguredException;
+import org.jahia.modules.genai.api.GenAiQuotaExceededException;
 import org.jahia.se.modules.contenttags.service.ContentTagsService;
 import org.jahia.services.content.JCRSessionWrapper;
 import org.jahia.services.render.RenderContext;
@@ -65,6 +67,14 @@ public class GenerateContentTagsAction extends Action {
             List<String> tags = contentTagsService.generateTags(resource.getNode(), tagLanguage, numberOfTags);
             JSONObject result = new JSONObject().put("tags", new JSONArray(tags));
             return new ActionResult(HttpServletResponse.SC_OK, null, result);
+        } catch (GenAiNotConfiguredException e) {
+            LOGGER.warn("Tag generation is not available: {}", e.getMessage());
+            JSONObject error = new JSONObject().put("error",
+                    "Tag generation is not available: genai-connector has no model configured for it");
+            return new ActionResult(HttpServletResponse.SC_SERVICE_UNAVAILABLE, null, error);
+        } catch (GenAiQuotaExceededException e) {
+            JSONObject error = new JSONObject().put("error", "Too many AI requests, try again later");
+            return new ActionResult(429, null, error);
         } catch (Exception e) {
             LOGGER.error("Tag generation failed for node {}", resource.getNode().getPath(), e);
             JSONObject error = new JSONObject().put("error", "Tag generation failed, see server log");

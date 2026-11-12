@@ -5,13 +5,13 @@ import org.jahia.services.content.JCRNodeWrapper;
 import java.util.List;
 
 /**
- * Generates content tags for a JCR node using the configured LLM provider.
+ * Generates content tags for a JCR node through genai-connector.
  */
 public interface ContentTagsService {
 
     /**
-     * Extracts the internationalized text of the given node, sends it to the configured
-     * LLM provider and returns the suggested tags.
+     * Extracts the internationalized text of the given node, sends it to the model of the configured
+     * genai-connector tier and returns the suggested tags.
      *
      * <p>The node must come from the calling user's session so that read permissions are
      * enforced — implementations never escalate to a system session.</p>
@@ -22,8 +22,11 @@ public interface ContentTagsService {
      *                     default and the effective count is clamped to a sane range
      * @return the suggested tags (at most {@code numberOfTags}), or an empty list when the node
      *         has no text
-     * @throws IllegalStateException when no provider matches the configuration, the provider
-     *                               has no API key, or the provider call fails
+     * @throws org.jahia.modules.genai.api.GenAiNotConfiguredException when genai-connector has no
+     *         model for the configured tier ({@code llm.tier})
+     * @throws org.jahia.modules.genai.api.GenAiQuotaExceededException when the calling user has
+     *         reached the rate limit of genai-connector
+     * @throws org.jahia.modules.genai.api.GenAiProviderException when the provider call fails
      */
     List<String> generateTags(JCRNodeWrapper node, String tagLanguage, int numberOfTags);
 
