@@ -81,6 +81,7 @@ llm.temperature=              # empty = provider default; also used for the alte
 #llm.user.prompt=Respond ONLY with a JSON array of concise single- or two-word strings, without markdown, explanations or duplicates.
 
 # --- Alternative text ---
+alt.generate.on.upload=true   # generate the text of each new image, in every site language
 alt.property=jahia_alt        # property that receives the text: a single-valued string
 alt.mixin=jmix:jahiaAlt       # mixin added before writing; empty when the image types declare it
 alt.tier=lite                 # its model must accept images
@@ -156,7 +157,11 @@ mutation {
 - Read the text back with `property(name: "jahia_alt", language: "en")`, or edit it in the Content
   Editor, where it shows as the "Alternative text" section of an image.
 - A rule (`META-INF/rules.drl`) adds `jmix:jahiaAlt` to each image when it is uploaded or replaced,
-  on the same trigger as Jahia's own `jmix:image`, so authors can type the text by hand too. The
+  on the same trigger as Jahia's own `jmix:image`, so authors can type the text by hand too.
+- With `alt.generate.on.upload=true` (the default), the same rule also queues the generation of the
+  text. A few seconds after the upload, it is written in every language of the image's site, as the
+  uploader, without replacing an existing text. The upload itself does not wait for the model, and
+  the server log says what each language got. The
   Content Editor ignores `extends = jmix:image`, because an image's primary type is `jnt:file`. An
   image uploaded before the module gets the mixin when it is replaced, or when the mutation writes
   its text. The rule always adds `jmix:jahiaAlt`, even when `alt.mixin` names another mixin.

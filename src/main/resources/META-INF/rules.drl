@@ -19,7 +19,8 @@ global JCRStoreProvider provider
 // The Content Editor offers an extending mixin only when the node's primary type matches its "extends".
 // An image is a jnt:file that gets jmix:image from the default module's "Set image mixin on update" rule,
 // so "extends = jmix:image" never matches it. This rule gives the image jmix:jahiaAlt on the same trigger,
-// so the editor shows its alternative text field.
+// so the editor shows its alternative text field. The action then queues the generation of the text, unless
+// alt.generate.on.upload is false; it returns at once and the text comes a few seconds later.
 rule "Set alternative text mixin on image update"
     salience 29 // right after the default module adds jmix:image (salience 30)
     when
@@ -28,4 +29,5 @@ rule "Set alternative text mixin on image update"
              - not in operation import
     then
         Add the type jmix:jahiaAlt
+        Execute the action "automaticContentTagsAltTextOnUpload" now on the node
 end

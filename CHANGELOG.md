@@ -14,6 +14,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   already has a text unless `overwrite` is set, and reports one result per image.
 - A rule adds `jmix:jahiaAlt` to each uploaded image, like Jahia adds `jmix:image`, so the Content
   Editor shows the alternative text field on every new image.
+- Alternative text at upload: with `alt.generate.on.upload=true` (the default), the text of each new
+  image is generated a few seconds after the upload, in every site language, as the uploader. An
+  existing text is never replaced.
 - Configuration keys `alt.tier`, `alt.max.length`, `alt.max.images`, `alt.max.image.bytes`,
   `alt.max.tokens` and `alt.prompt`.
 - Configurable target properties: `alt.property` and `alt.mixin` (default `jahia_alt` on

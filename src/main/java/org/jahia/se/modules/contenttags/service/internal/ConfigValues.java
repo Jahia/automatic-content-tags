@@ -47,6 +47,15 @@ final class ConfigValues {
         return s.isEmpty() ? null : s;
     }
 
+    boolean bool(String key, boolean defaultValue) {
+        String value = string(key, String.valueOf(defaultValue));
+        if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
+            LOGGER.warn("Invalid boolean for configuration key {}; using default {}", key, defaultValue);
+            return defaultValue;
+        }
+        return Boolean.parseBoolean(value);
+    }
+
     int integer(String key, int defaultValue, int min, int max) {
         int value;
         try {
