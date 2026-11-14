@@ -12,6 +12,7 @@ import org.jahia.se.modules.contenttags.service.AltTextResult;
 import org.jahia.se.modules.contenttags.service.AltTextService;
 import org.jahia.services.content.JCRContentUtils;
 import org.jahia.services.content.JCRNodeWrapper;
+import org.jahia.services.content.nodetypes.ExtendedPropertyDefinition;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Modified;
@@ -35,8 +36,8 @@ import java.util.Optional;
  * Default {@link AltTextService} implementation.
  *
  * <p>For each image it sends one rendition of the picture, with a short instruction, to the model of
- * the genai-connector tier {@code alt.tier}, cleans the answer and saves it in {@code jahia_alt}, in
- * the locale of the caller's session. It never opens a system session: an image the caller cannot
+ * the genai-connector tier {@code alt.tier}, cleans the answer and saves it in the property of
+ * {@code alt.property} (default {@code jahia_alt}), in the locale of the caller's session. It never opens a system session: an image the caller cannot
  * read is not listed, and an image the caller cannot edit is reported as failed before any model
  * call.</p>
  */
@@ -62,8 +63,8 @@ public class AltTextServiceImpl implements AltTextService {
     @Modified
     void configure(Map<String, Object> properties) {
         config = Config.from(ConfigValues.of(properties));
-        LOGGER.info("Automatic Content Tags configured: alternative text on the genai-connector tier '{}' ({}), "
-                        + "at most {} images per call", config.tier().id(),
+        LOGGER.info("Automatic Content Tags configured: alternative text in {}, on the genai-connector tier '{}' ({}), "
+                        + "at most {} images per call", config.target(), config.tier().id(),
                 genAi.isAvailable(config.tier()) ? "available" : "not configured yet", config.maxImages());
     }
 
@@ -80,10 +81,10 @@ public class AltTextServiceImpl implements AltTextService {
                 JCRNodeWrapper image = listed;
                 String existing;
                 try {
-                    existing = existingAltText(image);
+                    existing = existingAltText(image, cfg);
                 } catch (InvalidItemStateException e) {
                     image = reload(image);
-                    existing = existingAltText(image);
+                    existing = existingAltText(image, cfg);
                 }
                 if (existing != null && !overwrite) {
                     results.add(skipped(path, existing));
@@ -99,7 +100,7 @@ public class AltTextServiceImpl implements AltTextService {
                 } catch (InvalidItemStateException e) {
                     // A stale read before the model call: check the fresh copy, then try once more.
                     image = reload(image);
-                    String current = existingAltText(image);
+                    String current = existingAltText(image, cfg);
                     results.add(current != null && !overwrite ? skipped(path, current)
                             : process(image, current, overwrite, cfg));
                 }
@@ -155,12 +156,21 @@ public class AltTextServiceImpl implements AltTextService {
         return images;
     }
 
-    private static String existingAltText(JCRNodeWrapper image) throws RepositoryException {
-        if (!image.hasProperty(ALT_PROPERTY)) {
+    private static String existingAltText(JCRNodeWrapper image, Config cfg) throws RepositoryException {
+        String property = cfg.target().property();
+        if (!image.hasProperty(property)) {
             return null;
         }
-        String value = image.getProperty(ALT_PROPERTY).getString();
+        String value = image.getProperty(property).getString();
         return value == null || value.isBlank() ? null : value;
+    }
+
+    /**
+     * @return the definition that would hold the text on this image, or {@code null}; package-private so the
+     *         unit tests can stand in for the node type registry
+     */
+    ExtendedPropertyDefinition definitionOf(JCRNodeWrapper image, Config cfg) throws RepositoryException {
+        return cfg.target().definitionOn(image);
     }
 
     private AltTextResult process(JCRNodeWrapper image, String existing, boolean overwrite, Config cfg)
@@ -168,6 +178,11 @@ public class AltTextServiceImpl implements AltTextService {
         String path = image.getPath();
         if (!image.hasPermission(WRITE_PERMISSION)) {
             return new AltTextResult(path, AltTextResult.Status.FAILED, existing, "You cannot edit this image");
+        }
+        ExtendedPropertyDefinition definition = definitionOf(image, cfg);
+        if (definition == null || definition.isMultiple() || !TargetProperty.holdsText(definition)) {
+            return new AltTextResult(path, AltTextResult.Status.FAILED, existing, "The configured property "
+                    + cfg.target() + " is not a single-valued string property on this image");
         }
         Optional<ImageInput> payload;
         try {
@@ -201,10 +216,11 @@ public class AltTextServiceImpl implements AltTextService {
         }
 
         try {
-            if (!image.isNodeType(ALT_MIXIN)) {
-                image.addMixin(ALT_MIXIN);
+            String mixin = cfg.target().mixin();
+            if (mixin != null && !image.isNodeType(mixin)) {
+                image.addMixin(mixin);
             }
-            image.setProperty(ALT_PROPERTY, altText);
+            image.setProperty(cfg.target().property(), altText);
             image.getSession().save();
         } catch (AccessDeniedException e) {
             image.getSession().refresh(false);
@@ -212,7 +228,7 @@ public class AltTextServiceImpl implements AltTextService {
         } catch (InvalidItemStateException e) {
             // Another request, possibly on another cluster node, saved the image after this session read it.
             image.getSession().refresh(false);
-            String current = existingAltText(image);
+            String current = existingAltText(image, cfg);
             if (current != null && !overwrite) {
                 return new AltTextResult(path, AltTextResult.Status.SKIPPED, current,
                         "Another request gave the image an alternative text meanwhile");
@@ -249,11 +265,13 @@ public class AltTextServiceImpl implements AltTextService {
     /**
      * Immutable configuration snapshot.
      */
-    record Config(ModelTier tier, String instructions, int maxLength, int maxImages, int maxImageBytes,
-                  int maxTokens, Double temperature) {
+    record Config(TargetProperty target, ModelTier tier, String instructions, int maxLength, int maxImages,
+                  int maxImageBytes, int maxTokens, Double temperature) {
 
         static Config from(ConfigValues values) {
             return new Config(
+                    new TargetProperty(values.string("alt.property", DEFAULT_ALT_PROPERTY),
+                            values.optional("alt.mixin", DEFAULT_ALT_MIXIN)),
                     values.tier("alt.tier", ModelTier.LITE),
                     values.string("alt.prompt", DEFAULT_INSTRUCTIONS),
                     values.integer("alt.max.length", 150, 20, 1000),

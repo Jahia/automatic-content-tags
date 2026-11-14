@@ -5,6 +5,7 @@ import org.jahia.modules.genai.api.CompletionResult;
 import org.jahia.modules.genai.api.GenAiService;
 import org.jahia.modules.genai.api.ModelTier;
 import org.jahia.se.modules.contenttags.service.ContentTagsService;
+import org.jahia.se.modules.contenttags.service.TagTarget;
 import org.jahia.services.content.JCRNodeWrapper;
 import org.jahia.services.content.nodetypes.ExtendedPropertyDefinition;
 import org.jsoup.Jsoup;
@@ -22,6 +23,7 @@ import javax.jcr.RepositoryException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Default {@link ContentTagsService} implementation.
@@ -50,9 +52,12 @@ public class ContentTagsServiceImpl implements ContentTagsService {
     private static final int MIN_TAG_COUNT = 1;
     // Hard safety ceiling for the configurable maximum, to protect the token budget.
     private static final int ABSOLUTE_MAX_TAG_COUNT = 50;
+    static final String DEFAULT_TAG_PROPERTY = "j:tagList";
+    static final String DEFAULT_TAG_MIXIN = "jmix:tagged";
 
+    // Package-private for the unit tests, which inject a mock.
     @Reference
-    private GenAiService genAi;
+    GenAiService genAi;
 
     private volatile Config config = Config.from(ConfigValues.of(Map.of()));
 
@@ -65,8 +70,9 @@ public class ContentTagsServiceImpl implements ContentTagsService {
             LOGGER.warn("Automatic Content Tags ignores the 1.x provider keys {}: configure the provider, the model "
                     + "and the API key in genai-connector (org.jahia.modules.genai.cfg), then remove these keys", legacy);
         }
-        LOGGER.info("Automatic Content Tags configured: tags on the genai-connector tier '{}' ({})",
-                config.tier().id(), genAi.isAvailable(config.tier()) ? "available" : "not configured yet");
+        LOGGER.info("Automatic Content Tags configured: tags in {}, on the genai-connector tier '{}' ({})",
+                config.tagTarget(), config.tier().id(),
+                genAi.isAvailable(config.tier()) ? "available" : "not configured yet");
     }
 
     /** The keys of the 1.x built-in providers, which no longer have any effect; never their values. */
@@ -106,6 +112,23 @@ public class ContentTagsServiceImpl implements ContentTagsService {
         List<String> tags = TagResponseParser.parse(result.text(), count);
         LOGGER.debug("Model {} returned {} tags for node {}", result.model(), tags.size(), node.getPath());
         return tags;
+    }
+
+    @Override
+    public Optional<TagTarget> tagTarget(JCRNodeWrapper node) throws RepositoryException {
+        TargetProperty target = config.tagTarget();
+        ExtendedPropertyDefinition definition = definitionOf(node, target);
+        if (definition == null || !TargetProperty.holdsText(definition)) {
+            LOGGER.debug("The tag property {} cannot hold tags on {}", target, node.getPath());
+            return Optional.empty();
+        }
+        String field = definition.getDeclaringNodeType().getName() + "_" + target.property();
+        return Optional.of(new TagTarget(target.property(), target.mixin(), field, definition.isMultiple()));
+    }
+
+    /** Package-private so the unit tests can stand in for the node type registry. */
+    ExtendedPropertyDefinition definitionOf(JCRNodeWrapper node, TargetProperty target) throws RepositoryException {
+        return target.definitionOn(node);
     }
 
     @Override
@@ -155,14 +178,16 @@ public class ContentTagsServiceImpl implements ContentTagsService {
     /**
      * Immutable configuration snapshot.
      */
-    private record Config(ModelTier tier, String prompt, int maxTokens, Double temperature, int maxSourceChars,
-                          int tagCountDefault, int tagCountMax) {
+    record Config(TargetProperty tagTarget, ModelTier tier, String prompt, int maxTokens, Double temperature,
+                  int maxSourceChars, int tagCountDefault, int tagCountMax) {
 
         static Config from(ConfigValues values) {
             // Configurable ceiling, bounded by the absolute safety max; the default count can never exceed it.
             int tagCountMax = values.integer("llm.tag.count.max", DEFAULT_TAG_COUNT_MAX,
                     MIN_TAG_COUNT, ABSOLUTE_MAX_TAG_COUNT);
             return new Config(
+                    new TargetProperty(values.string("llm.tag.property", DEFAULT_TAG_PROPERTY),
+                            values.optional("llm.tag.mixin", DEFAULT_TAG_MIXIN)),
                     values.tier("llm.tier", ModelTier.LITE),
                     values.string("llm.user.prompt", DEFAULT_PROMPT),
                     values.integer("llm.max.tokens", DEFAULT_MAX_TOKENS, 1, Integer.MAX_VALUE),

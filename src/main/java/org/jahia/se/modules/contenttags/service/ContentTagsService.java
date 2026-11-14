@@ -2,7 +2,9 @@ package org.jahia.se.modules.contenttags.service;
 
 import org.jahia.services.content.JCRNodeWrapper;
 
+import javax.jcr.RepositoryException;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Generates content tags for a JCR node through genai-connector.
@@ -29,6 +31,16 @@ public interface ContentTagsService {
      * @throws org.jahia.modules.genai.api.GenAiProviderException when the provider call fails
      */
     List<String> generateTags(JCRNodeWrapper node, String tagLanguage, int numberOfTags);
+
+    /**
+     * Tells the editor form where to put the generated tags on this node. The server never writes them: the
+     * form does, and the editor saves.
+     *
+     * @param node the content node, read through the calling user's session
+     * @return the configured target, or empty when the configured property is not a string property that this
+     *         node or the configured mixin declares
+     */
+    Optional<TagTarget> tagTarget(JCRNodeWrapper node) throws RepositoryException;
 
     /**
      * @return the default number of tags used when a request does not specify one

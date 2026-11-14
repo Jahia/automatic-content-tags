@@ -16,12 +16,14 @@ import org.jahia.services.content.JCRNodeIteratorWrapper;
 import org.jahia.services.content.JCRNodeWrapper;
 import org.jahia.services.content.JCRPropertyWrapper;
 import org.jahia.services.content.JCRSessionWrapper;
+import org.jahia.services.content.nodetypes.ExtendedPropertyDefinition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import org.jahia.services.query.QueryResultWrapper;
 import javax.jcr.InvalidItemStateException;
+import javax.jcr.PropertyType;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -33,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -47,15 +50,65 @@ class AltTextServiceImplTest {
     private GenAiService genAi;
     private JCRSessionWrapper session;
     private AltTextServiceImpl service;
+    /** What the node type registry answers for the configured property; {@code null} when none is declared. */
+    private ExtendedPropertyDefinition definition;
+    private TargetProperty resolvedTarget;
 
     @BeforeEach
     void setUp() {
         genAi = mock(GenAiService.class);
         session = mock(JCRSessionWrapper.class, RETURNS_DEEP_STUBS);
         when(session.getLocale()).thenReturn(Locale.FRENCH);
-        service = new AltTextServiceImpl();
+        definition = textDefinition(false);
+        service = new AltTextServiceImpl() {
+            @Override
+            ExtendedPropertyDefinition definitionOf(JCRNodeWrapper image, Config cfg) {
+                resolvedTarget = cfg.target();
+                return definition;
+            }
+        };
         service.genAi = genAi;
         service.configure(Map.of());
+    }
+
+    @Test
+    void theConfiguredPropertyAndMixinAreWritten() throws Exception {
+        service.configure(Map.of("alt.property", "jcr:description", "alt.mixin", "jmix:description"));
+        JCRNodeWrapper image = image("/sites/s/files/cat.png", null, true);
+        answer("A grey cat.");
+
+        AltTextReport report = service.fillAltText(image, false, false);
+
+        assertEquals(1, report.count(Status.GENERATED));
+        assertEquals(new TargetProperty("jcr:description", "jmix:description"), resolvedTarget);
+        verify(image).addMixin("jmix:description");
+        verify(image).setProperty("jcr:description", "A grey cat.");
+        verify(image, never()).setProperty(eq(AltTextService.DEFAULT_ALT_PROPERTY), anyString());
+    }
+
+    @Test
+    void anEmptyMixinAddsNoMixin() throws Exception {
+        service.configure(Map.of("alt.property", "jcr:description", "alt.mixin", ""));
+        JCRNodeWrapper image = image("/sites/s/files/cat.png", null, true);
+        answer("A grey cat.");
+
+        service.fillAltText(image, false, false);
+
+        verify(image, never()).addMixin(anyString());
+        verify(image).setProperty("jcr:description", "A grey cat.");
+    }
+
+    @Test
+    void aPropertyThatCannotHoldTheTextCostsNoModelCall() throws Exception {
+        JCRNodeWrapper image = image("/sites/s/files/cat.png", null, true);
+
+        definition = null;
+        assertEquals(1, service.fillAltText(image, false, false).count(Status.FAILED));
+        definition = textDefinition(true);
+        assertEquals(1, service.fillAltText(image, false, false).count(Status.FAILED));
+
+        verify(genAi, never()).complete(any());
+        verify(image, never()).setProperty(anyString(), anyString());
     }
 
     @Test
@@ -68,8 +121,8 @@ class AltTextServiceImplTest {
         assertEquals(1, report.count(Status.GENERATED));
         assertFalse(report.truncated());
         assertEquals("A grey cat asleep on a sofa.", report.images().get(0).altText());
-        verify(image).addMixin(AltTextService.ALT_MIXIN);
-        verify(image).setProperty(AltTextService.ALT_PROPERTY, "A grey cat asleep on a sofa.");
+        verify(image).addMixin(AltTextService.DEFAULT_ALT_MIXIN);
+        verify(image).setProperty(AltTextService.DEFAULT_ALT_PROPERTY, "A grey cat asleep on a sofa.");
         verify(session).save();
 
         ArgumentCaptor<CompletionRequest> request = ArgumentCaptor.forClass(CompletionRequest.class);
@@ -93,7 +146,7 @@ class AltTextServiceImplTest {
 
         AltTextReport replaced = service.fillAltText(image, false, true);
         assertEquals(1, replaced.count(Status.GENERATED));
-        verify(image).setProperty(AltTextService.ALT_PROPERTY, "A grey cat.");
+        verify(image).setProperty(AltTextService.DEFAULT_ALT_PROPERTY, "A grey cat.");
     }
 
     @Test
@@ -168,8 +221,8 @@ class AltTextServiceImplTest {
         JCRPropertyWrapper saved = mock(JCRPropertyWrapper.class);
         when(saved.getString()).thenReturn("Written elsewhere");
         doAnswer(invocation -> {
-            when(image.hasProperty(AltTextService.ALT_PROPERTY)).thenReturn(true);
-            when(image.getProperty(AltTextService.ALT_PROPERTY)).thenReturn(saved);
+            when(image.hasProperty(AltTextService.DEFAULT_ALT_PROPERTY)).thenReturn(true);
+            when(image.getProperty(AltTextService.DEFAULT_ALT_PROPERTY)).thenReturn(saved);
             return null;
         }).when(session).refresh(false);
 
@@ -195,20 +248,20 @@ class AltTextServiceImplTest {
     void aStaleReadIsRetriedOnAFreshCopy() throws Exception {
         JCRNodeWrapper stale = image("/sites/s/files/cat.png", null, true);
         JCRNodeWrapper fresh = image("/sites/s/files/cat.png", null, true);
-        when(stale.hasProperty(AltTextService.ALT_PROPERTY)).thenThrow(new InvalidItemStateException("gone"));
+        when(stale.hasProperty(AltTextService.DEFAULT_ALT_PROPERTY)).thenThrow(new InvalidItemStateException("gone"));
         when(session.getNode("/sites/s/files/cat.png")).thenReturn(fresh);
         answer("A grey cat.");
 
         AltTextReport report = service.fillAltText(stale, false, false);
 
         assertEquals(1, report.count(Status.GENERATED));
-        verify(fresh).setProperty(AltTextService.ALT_PROPERTY, "A grey cat.");
+        verify(fresh).setProperty(AltTextService.DEFAULT_ALT_PROPERTY, "A grey cat.");
     }
 
     @Test
     void anUnreadableImageFailsAloneAndTheRunGoesOn() throws Exception {
         JCRNodeWrapper broken = image("/sites/s/files/album/a.png", null, true);
-        when(broken.hasProperty(AltTextService.ALT_PROPERTY)).thenThrow(new javax.jcr.RepositoryException("broken"));
+        when(broken.hasProperty(AltTextService.DEFAULT_ALT_PROPERTY)).thenThrow(new javax.jcr.RepositoryException("broken"));
         JCRNodeWrapper folder = folder("/sites/s/files/album", broken, image("/sites/s/files/album/b.png", null, true));
         answer("A photo.");
 
@@ -224,6 +277,13 @@ class AltTextServiceImplTest {
         when(genAi.complete(any())).thenThrow(new GenAiNotConfiguredException("no lite tier"));
 
         assertThrows(GenAiNotConfiguredException.class, () -> service.fillAltText(image, false, false));
+    }
+
+    private static ExtendedPropertyDefinition textDefinition(boolean multiple) {
+        ExtendedPropertyDefinition text = mock(ExtendedPropertyDefinition.class);
+        when(text.getRequiredType()).thenReturn(PropertyType.STRING);
+        when(text.isMultiple()).thenReturn(multiple);
+        return text;
     }
 
     private void answer(String text) {
@@ -244,8 +304,8 @@ class AltTextServiceImplTest {
         if (existingAlt != null) {
             JCRPropertyWrapper property = mock(JCRPropertyWrapper.class);
             when(property.getString()).thenReturn(existingAlt);
-            when(image.hasProperty(AltTextService.ALT_PROPERTY)).thenReturn(true);
-            when(image.getProperty(AltTextService.ALT_PROPERTY)).thenReturn(property);
+            when(image.hasProperty(AltTextService.DEFAULT_ALT_PROPERTY)).thenReturn(true);
+            when(image.getProperty(AltTextService.DEFAULT_ALT_PROPERTY)).thenReturn(property);
         }
         ImagePayloadTest.resource(image, "jcr:content", "image/png", new byte[] {1, 2, 3});
         return image;

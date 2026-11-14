@@ -34,6 +34,19 @@ final class ConfigValues {
         return s == null || s.isEmpty() ? defaultValue : s;
     }
 
+    /**
+     * @return the value of {@code key}; {@code defaultValue} when the key is absent; {@code null} when the key is
+     *         present with an empty value, which is how the configuration says "none"
+     */
+    String optional(String key, String defaultValue) {
+        if (!properties.containsKey(key)) {
+            return defaultValue;
+        }
+        Object value = properties.get(key);
+        String s = value == null ? "" : value.toString().trim();
+        return s.isEmpty() ? null : s;
+    }
+
     int integer(String key, int defaultValue, int min, int max) {
         int value;
         try {

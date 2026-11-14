@@ -31,6 +31,8 @@ Compatible with Jahia 8.2 (genai-connector requires 8.2.2). Requires Java 17 to 
 - **Alternative text of images**: the mixin `jmix:jahiaAlt` extends `jmix:image` with the i18n
   property `jahia_alt`. The GraphQL mutation `generateImageAltText` fills it for one image, or for
   every image below a path.
+- **Configurable targets**: the property and mixin that receive the alternative text and the tags come
+  from the configuration (`alt.property`, `alt.mixin`, `llm.tag.property`, `llm.tag.mixin`).
 - **One AI configuration**: provider, model and key come from genai-connector, which also applies
   the per-user rate limit, retries and the audit log.
 
@@ -69,6 +71,8 @@ the defaults are shown.
 ```properties
 # --- Tags ---
 llm.tier=lite                 # genai-connector tier: lite | balanced | advanced
+llm.tag.property=j:tagList    # property that receives the tags
+llm.tag.mixin=jmix:tagged     # mixin that declares it; empty when the content type declares it
 llm.tag.count.max=20          # most tags a request may generate (hard-capped at 50)
 llm.tag.count.default=5       # tag count when the dialog sends none
 llm.max.tokens=1024
@@ -77,6 +81,8 @@ llm.temperature=              # empty = provider default; also used for the alte
 #llm.user.prompt=Respond ONLY with a JSON array of concise single- or two-word strings, without markdown, explanations or duplicates.
 
 # --- Alternative text ---
+alt.property=jahia_alt        # property that receives the text: a single-valued string
+alt.mixin=jmix:jahiaAlt       # mixin added before writing; empty when the image types declare it
 alt.tier=lite                 # its model must accept images
 alt.max.length=150            # characters of one alternative text (20 to 1000)
 alt.max.images=20             # images sent to the model per call (1 to 500)
@@ -87,6 +93,20 @@ alt.max.tokens=300
 
 > The number of tags and the tag language come from the dialog on every request and are injected
 > authoritatively by the module. Keep `llm.user.prompt` to style guidance only.
+
+**Choosing the target properties.** Each feature writes one property, given by a name and the mixin that
+declares it. The module checks the pair on each node, against that exact property name, so a misspelled
+name is refused rather than written as a stray property.
+
+- Alternative text: `alt.property` must be a single-valued string. For example, `alt.property=jcr:description`
+  with `alt.mixin=jmix:description` writes the text into the image description. An image where the pair is
+  not valid is reported `FAILED`, without a model call.
+- Tags: the dialog fills the Content Editor field of `llm.tag.property` and activates `llm.tag.mixin`. For
+  example, `llm.tag.property=j:keywords` with `llm.tag.mixin=jmix:keywords` fills the keywords instead of the
+  tags. A single-valued string receives the tags joined with ", ". When the pair is not valid on the content,
+  the dialog says so and does not apply.
+- A property name must not contain a hyphen: Jahia stores definitions without quotes and reads `a-b` as two
+  properties.
 
 **Upgrading from 1.x**: the keys `llm.provider` and `<provider>.api.key`, `.model` and `.base.url`
 are no longer read. Configure the provider and the key in genai-connector instead, and remove them
@@ -125,8 +145,8 @@ mutation {
 | `includeSubNodes` | `false` | Also process every image below `path` |
 | `overwrite` | `false` | Replace an existing alternative text; otherwise such an image is `SKIPPED` |
 
-- The text is written in the edit workspace, in the i18n property `jahia_alt` of the mixin
-  `jmix:jahiaAlt`. Nothing is published.
+- The text is written in the edit workspace, in the configured property: by default the i18n property
+  `jahia_alt` of the mixin `jmix:jahiaAlt`. Nothing is published.
 - Each image is saved on its own. When a call reaches `alt.max.images` or the rate limit of
   genai-connector, it stops with `truncated: true`; call it again to continue, since the images done
   are skipped.

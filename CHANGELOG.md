@@ -14,6 +14,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   already has a text unless `overwrite` is set, and reports one result per image.
 - Configuration keys `alt.tier`, `alt.max.length`, `alt.max.images`, `alt.max.image.bytes`,
   `alt.max.tokens` and `alt.prompt`.
+- Configurable target properties: `alt.property` and `alt.mixin` (default `jahia_alt` on
+  `jmix:jahiaAlt`) for the alternative text, `llm.tag.property` and `llm.tag.mixin` (default
+  `j:tagList` on `jmix:tagged`) for the tags. Each pair is checked on the node against that exact
+  property name; a single-valued tag property receives the tags joined with ", ".
 - Configuration key `llm.tier`, the genai-connector tier of the tags (default `lite`).
 - Unit tests (JUnit 5, Mockito).
 

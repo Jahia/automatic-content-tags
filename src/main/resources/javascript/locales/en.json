@@ -14,7 +14,8 @@
             "replaceLabel": "Replace existing tags",
             "generating": "Generating tags…",
             "noTags": "No tags could be generated for this content. Note that only saved content is analysed.",
-            "error": "Tag generation failed. Check the server log for details."
+            "error": "Tag generation failed. Check the server log for details.",
+            "targetError": "The tag property configured for this module cannot hold tags on this content. Ask an administrator to check llm.tag.property and llm.tag.mixin."
         }
     }
 }
