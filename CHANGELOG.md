@@ -12,6 +12,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   includeSubNodes, overwrite)` fills it with a vision model, for one image or for every image below
   a path. It runs under the caller's session, saves each image on its own, skips an image that
   already has a text unless `overwrite` is set, and reports one result per image.
+- A rule adds `jmix:jahiaAlt` to each uploaded image, like Jahia adds `jmix:image`, so the Content
+  Editor shows the alternative text field on every new image.
 - Configuration keys `alt.tier`, `alt.max.length`, `alt.max.images`, `alt.max.image.bytes`,
   `alt.max.tokens` and `alt.prompt`.
 - Configurable target properties: `alt.property` and `alt.mixin` (default `jahia_alt` on

@@ -1,0 +1,31 @@
+package org.jahia.se.modules.contenttags.rules
+
+// list any import classes here
+import org.jahia.services.content.rules.*
+import org.jahia.services.content.*
+import javax.jcr.observation.Event
+import org.slf4j.Logger
+
+expander rules.dsl
+
+// declare any global variables here
+global User user
+global Service service
+global ImageService imageService
+global ExtractionService extractionService
+global Logger logger
+global JCRStoreProvider provider
+
+// The Content Editor offers an extending mixin only when the node's primary type matches its "extends".
+// An image is a jnt:file that gets jmix:image from the default module's "Set image mixin on update" rule,
+// so "extends = jmix:image" never matches it. This rule gives the image jmix:jahiaAlt on the same trigger,
+// so the editor shows its alternative text field.
+rule "Set alternative text mixin on image update"
+    salience 29 // right after the default module adds jmix:image (salience 30)
+    when
+        A file content has been modified
+             - the mimetype matches image/.*
+             - not in operation import
+    then
+        Add the type jmix:jahiaAlt
+end

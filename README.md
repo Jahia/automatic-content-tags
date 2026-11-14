@@ -154,7 +154,12 @@ mutation {
   `alt.max.image.bytes`, otherwise the thumbnail Jahia generated for the image. An image with neither
   is reported `FAILED`.
 - Read the text back with `property(name: "jahia_alt", language: "en")`, or edit it in the Content
-  Editor, where it shows as the optional "Alternative text" section of an image.
+  Editor, where it shows as the "Alternative text" section of an image.
+- A rule (`META-INF/rules.drl`) adds `jmix:jahiaAlt` to each image when it is uploaded or replaced,
+  on the same trigger as Jahia's own `jmix:image`, so authors can type the text by hand too. The
+  Content Editor ignores `extends = jmix:image`, because an image's primary type is `jnt:file`. An
+  image uploaded before the module gets the mixin when it is replaced, or when the mutation writes
+  its text. The rule always adds `jmix:jahiaAlt`, even when `alt.mixin` names another mixin.
 
 ## Security notes
 
