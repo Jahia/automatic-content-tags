@@ -73,37 +73,31 @@ public class AltTextServiceImpl implements AltTextService {
             throws RepositoryException {
         Config cfg = config;
         List<AltTextResult> results = new ArrayList<>();
-        int budget = cfg.maxImages();
+        // Only the images sent to the model count: a skipped or refused image costs nothing.
+        int modelCalls = 0;
         boolean truncated = false;
         for (JCRNodeWrapper listed : images(node, includeSubNodes)) {
             String path = listed.getPath();
             try {
                 JCRNodeWrapper image = listed;
-                String existing;
+                Prepared prepared;
                 try {
-                    existing = existingAltText(image, cfg);
+                    prepared = prepare(image, overwrite, cfg);
                 } catch (InvalidItemStateException e) {
+                    // A stale read before the model call: check the fresh copy once more.
                     image = reload(image);
-                    existing = existingAltText(image, cfg);
+                    prepared = prepare(image, overwrite, cfg);
                 }
-                if (existing != null && !overwrite) {
-                    results.add(skipped(path, existing));
+                if (prepared.result() != null) {
+                    results.add(prepared.result());
                     continue;
                 }
-                if (budget == 0) {
+                if (modelCalls == cfg.maxImages()) {
                     truncated = true;
                     break;
                 }
-                budget--;
-                try {
-                    results.add(process(image, existing, overwrite, cfg));
-                } catch (InvalidItemStateException e) {
-                    // A stale read before the model call: check the fresh copy, then try once more.
-                    image = reload(image);
-                    String current = existingAltText(image, cfg);
-                    results.add(current != null && !overwrite ? skipped(path, current)
-                            : process(image, current, overwrite, cfg));
-                }
+                modelCalls++;
+                results.add(generate(image, prepared, overwrite, cfg));
             } catch (GenAiQuotaExceededException e) {
                 results.add(new AltTextResult(path, AltTextResult.Status.FAILED, null,
                         "The AI rate limit is reached, try again later"));
@@ -173,36 +167,59 @@ public class AltTextServiceImpl implements AltTextService {
         return cfg.target().definitionOn(image);
     }
 
-    private AltTextResult process(JCRNodeWrapper image, String existing, boolean overwrite, Config cfg)
-            throws RepositoryException {
+    /**
+     * What one image needs before its model call: either the result that ends its turn without a call
+     * ({@code result} set), or its current text, picture and prompt.
+     */
+    private record Prepared(AltTextResult result, String existing, ImageInput picture, String prompt) {
+
+        static Prepared done(AltTextResult result) {
+            return new Prepared(result, null, null, null);
+        }
+    }
+
+    /** Every read and every check of the image that comes before its model call. */
+    private Prepared prepare(JCRNodeWrapper image, boolean overwrite, Config cfg) throws RepositoryException {
         String path = image.getPath();
+        String existing = existingAltText(image, cfg);
+        if (existing != null && !overwrite) {
+            return Prepared.done(skipped(path, existing));
+        }
         if (!image.hasPermission(WRITE_PERMISSION)) {
-            return new AltTextResult(path, AltTextResult.Status.FAILED, existing, "You cannot edit this image");
+            return Prepared.done(new AltTextResult(path, AltTextResult.Status.FAILED, existing,
+                    "You cannot edit this image"));
         }
         ExtendedPropertyDefinition definition = definitionOf(image, cfg);
         if (definition == null || definition.isMultiple() || !TargetProperty.holdsText(definition)) {
-            return new AltTextResult(path, AltTextResult.Status.FAILED, existing, "The configured property "
-                    + cfg.target() + " is not a single-valued string property on this image");
+            return Prepared.done(new AltTextResult(path, AltTextResult.Status.FAILED, existing,
+                    "The configured property " + cfg.target() + " is not a single-valued string property on this image"));
         }
         Optional<ImageInput> payload;
         try {
             payload = ImagePayload.select(image, cfg.maxImageBytes());
         } catch (IOException e) {
             LOGGER.warn("Unable to read the image {}", path, e);
-            return new AltTextResult(path, AltTextResult.Status.FAILED, existing, "The image cannot be read");
+            return Prepared.done(new AltTextResult(path, AltTextResult.Status.FAILED, existing,
+                    "The image cannot be read"));
         }
         if (payload.isEmpty()) {
-            return new AltTextResult(path, AltTextResult.Status.FAILED, existing,
-                    "The image has no JPEG, PNG, GIF or WebP rendition of at most " + cfg.maxImageBytes() + " bytes");
+            return Prepared.done(new AltTextResult(path, AltTextResult.Status.FAILED, existing,
+                    "The image has no JPEG, PNG, GIF or WebP rendition of at most " + cfg.maxImageBytes() + " bytes"));
         }
+        return new Prepared(null, existing, payload.get(), prompt(image, cfg));
+    }
 
+    private AltTextResult generate(JCRNodeWrapper image, Prepared prepared, boolean overwrite, Config cfg)
+            throws RepositoryException {
+        String path = image.getPath();
+        String existing = prepared.existing();
         CompletionResult result;
         try {
             result = genAi.complete(CompletionRequest.builder()
                     .tier(ModelTier.VISION)
                     .instructions(cfg.instructions())
-                    .input(prompt(image, cfg))
-                    .images(List.of(payload.get()))
+                    .input(prepared.prompt())
+                    .images(List.of(prepared.picture()))
                     .maxOutputTokens(cfg.maxTokens())
                     .temperature(cfg.temperature())
                     .build());

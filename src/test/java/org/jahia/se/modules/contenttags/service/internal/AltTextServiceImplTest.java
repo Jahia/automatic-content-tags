@@ -179,6 +179,27 @@ class AltTextServiceImplTest {
     }
 
     @Test
+    void onlyTheImagesSentToTheModelCountAgainstTheImageLimit() throws Exception {
+        service.configure(Map.of("alt.max.images", "1"));
+        JCRNodeWrapper vector = image("/sites/s/files/album/a.svg", null, true);
+        ImagePayloadTest.resource(vector, "jcr:content", "image/svg+xml", new byte[] {1});
+        JCRNodeWrapper folder = folder("/sites/s/files/album",
+                vector,
+                image("/sites/s/files/album/b.png", null, false),
+                image("/sites/s/files/album/c.png", null, true),
+                image("/sites/s/files/album/d.png", null, true));
+        answer("A photo.");
+
+        AltTextReport report = service.fillAltText(folder, true, false);
+
+        assertEquals(2, report.count(Status.FAILED));
+        assertEquals(1, report.count(Status.GENERATED));
+        assertEquals("/sites/s/files/album/c.png", report.images().get(2).path());
+        assertTrue(report.truncated());
+        verify(genAi, times(1)).complete(any());
+    }
+
+    @Test
     void theRateLimitStopsTheRunAndKeepsWhatWasDone() throws Exception {
         JCRNodeWrapper folder = folder("/sites/s/files/album",
                 image("/sites/s/files/album/a.png", null, true),
