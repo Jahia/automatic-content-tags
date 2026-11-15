@@ -14,7 +14,7 @@ export const AutoTagsActionComponent = ({render: Render, ...otherProps}) => {
     const {checksResult} = useNodeChecks(
         {path: nodeData.path},
         {
-            showOnNodeTypes: ['jnt:content', 'jnt:page', 'jmix:mainResource'],
+            showOnNodeTypes: ['jnt:content', 'jnt:page', 'jmix:mainResource', 'jmix:image'],
             requireModuleInstalledOnSite: ['automatic-content-tags']
         }
     );

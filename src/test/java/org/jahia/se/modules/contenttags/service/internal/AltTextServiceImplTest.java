@@ -127,7 +127,7 @@ class AltTextServiceImplTest {
 
         ArgumentCaptor<CompletionRequest> request = ArgumentCaptor.forClass(CompletionRequest.class);
         verify(genAi).complete(request.capture());
-        assertEquals(ModelTier.LITE, request.getValue().tier());
+        assertEquals(ModelTier.VISION, request.getValue().tier());
         assertEquals(1, request.getValue().images().size());
         assertEquals("image/png", request.getValue().images().get(0).mediaType());
         assertTrue(request.getValue().input().contains("French"));

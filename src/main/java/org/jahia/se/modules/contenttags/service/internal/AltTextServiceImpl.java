@@ -36,7 +36,7 @@ import java.util.Optional;
  * Default {@link AltTextService} implementation.
  *
  * <p>For each image it sends one rendition of the picture, with a short instruction, to the model of
- * the genai-connector tier {@code alt.tier}, cleans the answer and saves it in the property of
+ * the genai-connector tier {@code vision}, cleans the answer and saves it in the property of
  * {@code alt.property} (default {@code jahia_alt}), in the locale of the caller's session. It never opens a system session: an image the caller cannot
  * read is not listed, and an image the caller cannot edit is reported as failed before any model
  * call.</p>
@@ -64,8 +64,8 @@ public class AltTextServiceImpl implements AltTextService {
     void configure(Map<String, Object> properties) {
         config = Config.from(ConfigValues.of(properties));
         LOGGER.info("Automatic Content Tags configured: alternative text in {}, on the genai-connector tier '{}' ({}), "
-                        + "at most {} images per call", config.target(), config.tier().id(),
-                genAi.isAvailable(config.tier()) ? "available" : "not configured yet", config.maxImages());
+                        + "at most {} images per call", config.target(), ModelTier.VISION.id(),
+                genAi.isAvailable(ModelTier.VISION) ? "available" : "not configured yet", config.maxImages());
     }
 
     @Override
@@ -199,7 +199,7 @@ public class AltTextServiceImpl implements AltTextService {
         CompletionResult result;
         try {
             result = genAi.complete(CompletionRequest.builder()
-                    .tier(cfg.tier())
+                    .tier(ModelTier.VISION)
                     .instructions(cfg.instructions())
                     .input(prompt(image, cfg))
                     .images(List.of(payload.get()))
@@ -265,18 +265,17 @@ public class AltTextServiceImpl implements AltTextService {
     /**
      * Immutable configuration snapshot.
      */
-    record Config(TargetProperty target, ModelTier tier, String instructions, int maxLength, int maxImages,
+    record Config(TargetProperty target, String instructions, int maxLength, int maxImages,
                   int maxImageBytes, int maxTokens, Double temperature) {
 
         static Config from(ConfigValues values) {
             return new Config(
                     new TargetProperty(values.string("alt.property", DEFAULT_ALT_PROPERTY),
                             values.optional("alt.mixin", DEFAULT_ALT_MIXIN)),
-                    values.tier("alt.tier", ModelTier.LITE),
                     values.string("alt.prompt", DEFAULT_INSTRUCTIONS),
                     values.integer("alt.max.length", 150, 20, 1000),
                     values.integer("alt.max.images", 20, 1, 500),
-                    values.integer("alt.max.image.bytes", 5 * 1024 * 1024, 1024, 20 * 1024 * 1024),
+                    ImagePayload.maxBytes(values),
                     values.integer("alt.max.tokens", 300, 16, 8192),
                     values.decimal("llm.temperature"));
         }

@@ -3,6 +3,7 @@ package org.jahia.se.modules.contenttags.service.internal;
 import org.jahia.modules.genai.api.CompletionRequest;
 import org.jahia.modules.genai.api.CompletionResult;
 import org.jahia.modules.genai.api.GenAiService;
+import org.jahia.modules.genai.api.ImageInput;
 import org.jahia.modules.genai.api.ModelTier;
 import org.jahia.se.modules.contenttags.service.ContentTagsService;
 import org.jahia.se.modules.contenttags.service.TagTarget;
@@ -20,6 +21,7 @@ import javax.jcr.Property;
 import javax.jcr.PropertyIterator;
 import javax.jcr.PropertyType;
 import javax.jcr.RepositoryException;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -30,8 +32,9 @@ import java.util.Optional;
  *
  * <p>Extracts the internationalized single-valued string properties of a node (read through
  * the calling user's session — no privilege escalation), strips HTML, and asks genai-connector for
- * tags on the model tier of {@code llm.tier}. The operator chooses the provider, the model and the
- * key of that tier in the genai-connector configuration, never here.</p>
+ * tags on the model tier of {@code llm.tier}. An image ({@code jmix:image}) also sends its picture,
+ * on the tier {@code vision}, so its tags describe what it shows. The operator chooses the provider,
+ * the model and the key of each tier in the genai-connector configuration, never here.</p>
  *
  * <p>Configuration is bound to PID {@code org.jahia.se.modules.contenttags}; the parsed snapshot is
  * held in an immutable {@link Config} record swapped atomically, so concurrent calls are safe.</p>
@@ -70,9 +73,10 @@ public class ContentTagsServiceImpl implements ContentTagsService {
             LOGGER.warn("Automatic Content Tags ignores the 1.x provider keys {}: configure the provider, the model "
                     + "and the API key in genai-connector (org.jahia.modules.genai.cfg), then remove these keys", legacy);
         }
-        LOGGER.info("Automatic Content Tags configured: tags in {}, on the genai-connector tier '{}' ({})",
-                config.tagTarget(), config.tier().id(),
-                genAi.isAvailable(config.tier()) ? "available" : "not configured yet");
+        LOGGER.info("Automatic Content Tags configured: tags in {}, on the genai-connector tier '{}' ({}), and on "
+                        + "'{}' for an image ({})", config.tagTarget(), config.tier().id(),
+                genAi.isAvailable(config.tier()) ? "available" : "not configured yet", ModelTier.VISION.id(),
+                genAi.isAvailable(ModelTier.VISION) ? "available" : "not configured yet");
     }
 
     /** The keys of the 1.x built-in providers, which no longer have any effect; never their values. */
@@ -93,22 +97,28 @@ public class ContentTagsServiceImpl implements ContentTagsService {
         int count = clampCount(numberOfTags, cfg.tagCountDefault(), cfg.tagCountMax());
 
         String text = extractText(node, cfg.maxSourceChars());
-        if (text.isEmpty()) {
-            LOGGER.debug("No internationalized text found on node {}", node.getPath());
+        Optional<ImageInput> picture = picture(node, cfg);
+        if (text.isEmpty() && picture.isEmpty()) {
+            LOGGER.debug("No internationalized text and no image found on node {}", node.getPath());
             return Collections.emptyList();
         }
 
         // The count and language are authoritative here, so the configurable prompt only has to
         // carry style guidance (and must not hardcode a number).
-        String prompt = "Generate exactly " + count + " relevant tags, in " + tagLanguage
-                + ", for the following content. " + cfg.prompt() + " Content: " + text;
-        LOGGER.debug("Requesting {} tags on tier '{}' for node {}", count, cfg.tier().id(), node.getPath());
-        CompletionResult result = genAi.complete(CompletionRequest.builder()
-                .tier(cfg.tier())
-                .input(prompt)
+        String ask = "Generate exactly " + count + " relevant tags, in " + tagLanguage;
+        CompletionRequest.Builder request = CompletionRequest.builder()
                 .maxOutputTokens(cfg.maxTokens())
-                .temperature(cfg.temperature())
-                .build());
+                .temperature(cfg.temperature());
+        if (picture.isPresent()) {
+            String prompt = ask + ", for this image. " + cfg.prompt() + " Its file name is \"" + node.getName() + "\"."
+                    + (text.isEmpty() ? "" : " Its text: " + text);
+            request.tier(ModelTier.VISION).input(prompt).images(List.of(picture.get()));
+        } else {
+            request.tier(cfg.tier()).input(ask + ", for the following content. " + cfg.prompt() + " Content: " + text);
+        }
+        CompletionRequest built = request.build();
+        LOGGER.debug("Requesting {} tags on tier '{}' for node {}", count, built.tier().id(), node.getPath());
+        CompletionResult result = genAi.complete(built);
         List<String> tags = TagResponseParser.parse(result.text(), count);
         LOGGER.debug("Model {} returned {} tags for node {}", result.model(), tags.size(), node.getPath());
         return tags;
@@ -139,6 +149,27 @@ public class ContentTagsServiceImpl implements ContentTagsService {
     @Override
     public int getMaxTagCount() {
         return config.tagCountMax();
+    }
+
+    /**
+     * @return the picture of an image node, read through the caller's session; empty for another node, and
+     *         for an image with no rendition the model accepts, whose tags then come from its text only
+     */
+    private static Optional<ImageInput> picture(JCRNodeWrapper node, Config cfg) {
+        try {
+            if (!node.isNodeType("jmix:image")) {
+                return Optional.empty();
+            }
+            Optional<ImageInput> picture = ImagePayload.select(node, cfg.maxImageBytes());
+            if (picture.isEmpty()) {
+                LOGGER.debug("The image {} has no rendition the model accepts, so its tags come from its text",
+                        node.getPath());
+            }
+            return picture;
+        } catch (RepositoryException | IOException e) {
+            LOGGER.warn("Unable to read the image {}, so its tags come from its text", node.getPath(), e);
+            return Optional.empty();
+        }
     }
 
     private static int clampCount(int requested, int configuredDefault, int configuredMax) {
@@ -179,7 +210,7 @@ public class ContentTagsServiceImpl implements ContentTagsService {
      * Immutable configuration snapshot.
      */
     record Config(TargetProperty tagTarget, ModelTier tier, String prompt, int maxTokens, Double temperature,
-                  int maxSourceChars, int tagCountDefault, int tagCountMax) {
+                  int maxSourceChars, int maxImageBytes, int tagCountDefault, int tagCountMax) {
 
         static Config from(ConfigValues values) {
             // Configurable ceiling, bounded by the absolute safety max; the default count can never exceed it.
@@ -193,6 +224,7 @@ public class ContentTagsServiceImpl implements ContentTagsService {
                     values.integer("llm.max.tokens", DEFAULT_MAX_TOKENS, 1, Integer.MAX_VALUE),
                     values.decimal("llm.temperature"),
                     values.integer("llm.max.source.chars", DEFAULT_MAX_SOURCE_CHARS, 1, Integer.MAX_VALUE),
+                    ImagePayload.maxBytes(values),
                     values.integer("llm.tag.count.default", DEFAULT_TAG_COUNT, MIN_TAG_COUNT, tagCountMax),
                     tagCountMax);
         }

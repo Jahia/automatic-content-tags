@@ -13,7 +13,8 @@ public interface ContentTagsService {
 
     /**
      * Extracts the internationalized text of the given node, sends it to the model of the configured
-     * genai-connector tier and returns the suggested tags.
+     * genai-connector tier and returns the suggested tags. An image also sends its picture, on the
+     * tier {@code vision}.
      *
      * <p>The node must come from the calling user's session so that read permissions are
      * enforced — implementations never escalate to a system session.</p>
@@ -23,9 +24,9 @@ public interface ContentTagsService {
      * @param numberOfTags how many tags to request; values &le; 0 fall back to the configured
      *                     default and the effective count is clamped to a sane range
      * @return the suggested tags (at most {@code numberOfTags}), or an empty list when the node
-     *         has no text
+     *         has no text and no picture
      * @throws org.jahia.modules.genai.api.GenAiNotConfiguredException when genai-connector has no
-     *         model for the configured tier ({@code llm.tier})
+     *         model for the tier of the call ({@code llm.tier}, or {@code vision} for an image)
      * @throws org.jahia.modules.genai.api.GenAiQuotaExceededException when the calling user has
      *         reached the rate limit of genai-connector
      * @throws org.jahia.modules.genai.api.GenAiProviderException when the provider call fails

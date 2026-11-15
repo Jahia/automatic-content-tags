@@ -17,13 +17,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Alternative text at upload: with `alt.generate.on.upload=true` (the default), the text of each new
   image is generated a few seconds after the upload, in every site language, as the uploader. An
   existing text is never replaced.
-- Configuration keys `alt.tier`, `alt.max.length`, `alt.max.images`, `alt.max.image.bytes`,
-  `alt.max.tokens` and `alt.prompt`.
+- Configuration keys `alt.max.length`, `alt.max.images`, `alt.max.tokens` and `alt.prompt`.
+- The alternative text and the tags of an image use the genai-connector tier `vision`, whose model
+  reads images. The operator chooses that model in genai-connector, so this module has no tier key
+  for images.
+- Tags of an image: the Auto Tagging action now shows on images (`jmix:image`), and the model sees
+  the picture with the file name and the text of the image. An image with no rendition the model
+  accepts is tagged from its text, on `llm.tier`.
+- Configuration key `image.max.bytes`, the largest image sent to the model, for the alternative text
+  and the tags (default 5 MB).
 - Configurable target properties: `alt.property` and `alt.mixin` (default `jahia_alt` on
   `jmix:jahiaAlt`) for the alternative text, `llm.tag.property` and `llm.tag.mixin` (default
   `j:tagList` on `jmix:tagged`) for the tags. Each pair is checked on the node against that exact
   property name; a single-valued tag property receives the tags joined with ", ".
-- Configuration key `llm.tier`, the genai-connector tier of the tags (default `lite`).
+- Configuration key `llm.tier`, the genai-connector tier of the tags of a content from its text
+  (default `lite`).
 - Unit tests (JUnit 5, Mockito).
 
 ### Changed

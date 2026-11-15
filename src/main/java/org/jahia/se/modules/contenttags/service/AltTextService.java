@@ -39,7 +39,7 @@ public interface AltTextService {
      * @param overwrite       whether to replace an existing alternative text
      * @return one result per image visited
      * @throws org.jahia.modules.genai.api.GenAiNotConfiguredException when genai-connector has no
-     *         model for the configured tier ({@code alt.tier})
+     *         model for the tier {@code vision}
      * @throws RepositoryException when the images cannot be listed
      */
     AltTextReport fillAltText(JCRNodeWrapper node, boolean includeSubNodes, boolean overwrite)

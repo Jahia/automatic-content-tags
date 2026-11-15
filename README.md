@@ -3,7 +3,7 @@
 This module uses AI to write two kinds of metadata in Jahia:
 
 - **Tags**: an "Auto Tagging" action in the Content Editor fills `j:tagList` with tags generated from
-  the text of the content.
+  the text of the content. An image is tagged from its picture, with a vision model.
 - **Alternative text of images**: a GraphQL mutation writes the `jahia_alt` property of an image, or
   of every image below a folder, with a vision model that looks at the picture.
 
@@ -15,10 +15,11 @@ Compatible with Jahia 8.2 (genai-connector requires 8.2.2). Requires Java 17 to 
 
 ## Requirements
 
-- [genai-connector](https://github.com/Jahia/genai-connector) installed and started, with a model
-  configured for the tier that each feature uses (`lite` by default).
-- For the alternative text, the model of that tier must accept images, and genai-connector must
-  support images on completions (`CompletionRequest.Builder.images`).
+- [genai-connector](https://github.com/Jahia/genai-connector) installed and started, with the tier
+  `vision` (genai-connector ADR 0010). Each call that sends an image uses `vision`: the alternative
+  text, and the tags of an image. The tags of other content use `llm.tier` (`lite` by default).
+- The model of `vision` must accept images. With no `vision.*` key, genai-connector uses its shared
+  model for `vision`; the shipped `mistral/mistral-small-latest` accepts images.
 - `graphql-dxm-provider`, which every Jahia 8.2 ships.
 
 ## Features
@@ -26,6 +27,8 @@ Compatible with Jahia 8.2 (genai-connector requires 8.2.2). Requires Java 17 to 
 - **Content Editor integration**: an "Auto Tagging" action in the Content Editor 3-dots menu.
 - **AI-powered tagging**: extracts the internationalized text of the selected JCR node (through the
   calling user's session) and asks the model for relevant tags in the language chosen by the editor.
+  For an image (`jmix:image`), the model of `vision` also sees the picture, so the tags describe what
+  the image shows. For example, a photo named `IMG_2041.jpg` with no title still gets `cat, sofa`.
 - **Editor controls**: choose the **number of tags** (default 5, up to the admin-configured
   `llm.tag.count.max`) and whether to **replace** the existing tags or **add to** them.
 - **Alternative text of images**: the mixin `jmix:jahiaAlt` extends `jmix:image` with the i18n
@@ -60,8 +63,9 @@ src/javascript/                                # React 18 UI extension (Module F
    ```
 3. Deploy genai-connector, then `target/automatic-content-tags-<version>.jar`, to your Jahia
    instance (module management UI or `digital-factory-data/modules`).
-4. Configure a model for the `lite` tier in genai-connector (`org.jahia.modules.genai.cfg`). See the
-   genai-connector README.
+4. Configure genai-connector (`org.jahia.modules.genai.cfg`): a model for the `lite` tier, and a
+   model that reads images for the `vision` tier. For example, `vision.model=mistral/mistral-medium-latest`
+   sends the image calls to a larger gateway model. See the genai-connector README.
 
 ## Configuration
 
@@ -70,7 +74,8 @@ the defaults are shown.
 
 ```properties
 # --- Tags ---
-llm.tier=lite                 # genai-connector tier: lite | balanced | advanced
+llm.tier=lite                 # genai-connector tier of the tags of a content: lite | balanced | advanced
+                              # (an image is tagged from its picture, on the tier vision)
 llm.tag.property=j:tagList    # property that receives the tags
 llm.tag.mixin=jmix:tagged     # mixin that declares it; empty when the content type declares it
 llm.tag.count.max=20          # most tags a request may generate (hard-capped at 50)
@@ -78,16 +83,16 @@ llm.tag.count.default=5       # tag count when the dialog sends none
 llm.max.tokens=1024
 llm.max.source.chars=6000     # characters of content text sent to the model
 llm.temperature=              # empty = provider default; also used for the alternative text
+image.max.bytes=5242880       # largest image sent to the model, for the alternative text and the tags;
+                              # a larger original is replaced by its Jahia thumbnail
 #llm.user.prompt=Respond ONLY with a JSON array of concise single- or two-word strings, without markdown, explanations or duplicates.
 
 # --- Alternative text ---
 alt.generate.on.upload=true   # generate the text of each new image, in every site language
 alt.property=jahia_alt        # property that receives the text: a single-valued string
 alt.mixin=jmix:jahiaAlt       # mixin added before writing; empty when the image types declare it
-alt.tier=lite                 # its model must accept images
 alt.max.length=150            # characters of one alternative text (20 to 1000)
 alt.max.images=20             # images sent to the model per call (1 to 500)
-alt.max.image.bytes=5242880   # a larger original is replaced by its Jahia thumbnail
 alt.max.tokens=300
 #alt.prompt=                  # replaces the built-in instructions
 ```
@@ -113,17 +118,26 @@ name is refused rather than written as a stray property.
 are no longer read. Configure the provider and the key in genai-connector instead, and remove them
 from this file.
 
+**Choosing the model of the images.** Set it in genai-connector, with `vision.model` or a whole
+`vision.*` connection. This module has no tier key for images. The keys `alt.tier` and
+`alt.max.image.bytes` of earlier 2.0.0 snapshots are no longer read; `image.max.bytes` replaces the
+second.
+
 ## Usage
 
 ### Tags
 
-1. Open a content item in the Content Editor.
+1. Open a content item, or an image, in the Content Editor.
 2. Open the 3-dots menu and click **Auto Tagging**.
 3. Select the tag language, set how many tags you want (default 5), and choose whether to
    **replace existing tags** (checked) or **add to them** (unchecked).
 4. Click **Apply**. The tag field is filled with the generated tags; save to persist them.
 
 > Tags are generated from the **saved** content of the node. Save first, then generate tags.
+
+For an image, the model receives the original file or a Jahia thumbnail, as for the alternative text
+below, with the file name and the saved text of the image. An image with no JPEG, PNG, GIF or WebP
+rendition is tagged from its text only, on `llm.tier`.
 
 ### Alternative text of images
 
@@ -151,8 +165,8 @@ mutation {
 - Each image is saved on its own. When a call reaches `alt.max.images` or the rate limit of
   genai-connector, it stops with `truncated: true`; call it again to continue, since the images done
   are skipped.
-- The model receives the original file when it is a JPEG, PNG, GIF or WebP of at most
-  `alt.max.image.bytes`, otherwise the thumbnail Jahia generated for the image. An image with neither
+- The model of the tier `vision` receives the original file when it is a JPEG, PNG, GIF or WebP of
+  at most `image.max.bytes`, otherwise the thumbnail Jahia generated for the image. An image with neither
   is reported `FAILED`.
 - Read the text back with `property(name: "jahia_alt", language: "en")`, or edit it in the Content
   Editor, where it shows as the "Alternative text" section of an image.

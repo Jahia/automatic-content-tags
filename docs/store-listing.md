@@ -19,7 +19,7 @@ Generate content tags and image alternative text with AI, through Jahia's genai-
 
 ## Description
 
-Automatic Content Tags adds an **Auto Tagging** action to the Jahia Content Editor. In one click it reads the text of the content you are editing, sends it to a large language model, and fills the content's tag field with relevant, on-topic tags — in the language you choose.
+Automatic Content Tags adds an **Auto Tagging** action to the Jahia Content Editor. In one click it reads the text of the content you are editing, sends it to a large language model, and fills the content's tag field with relevant, on-topic tags — in the language you choose. On an image, a vision model looks at the picture, so the tags describe what it shows.
 
 It also writes the **alternative text of images**: a GraphQL mutation sends each image to a vision model and saves its description in the image's `jahia_alt` property, for one image or for a whole folder.
 
@@ -42,18 +42,18 @@ It is built to Jahia's security and integration standards: the action is POST-on
 **Requirements**
 
 - Jahia 8.2.2 or later.
-- genai-connector, with a model configured for the `lite` tier. For the alternative text, that model must accept images. Model usage is billed by the provider configured in genai-connector.
+- genai-connector, with a model for the `lite` tier, and a model that accepts images for the `vision` tier. The alternative text and the tags of an image use `vision`. Model usage is billed by the provider configured in genai-connector.
 
 ## Installation
 
 1. **Install the module.** In Jahia Administration → Modules, upload the module JAR (or install it directly from the Jahia Store), then start it.
 2. **Enable it on your site.** In Administration → Modules, add *Automatic Content Tags* to the site(s) where you want the action available. (The Auto Tagging action only appears on sites where the module is enabled.)
-3. **Configure AI in genai-connector.** Set the provider, the model and the key of the `lite` tier in `org.jahia.modules.genai.cfg` (see the genai-connector documentation). Optionally tune this module in `org.jahia.se.modules.contenttags.cfg` in `digital-factory-data/karaf/etc/`:
+3. **Configure AI in genai-connector.** Set the provider, the model and the key of the `lite` and `vision` tiers in `org.jahia.modules.genai.cfg` (see the genai-connector documentation). Optionally tune this module in `org.jahia.se.modules.contenttags.cfg` in `digital-factory-data/karaf/etc/`:
 
    ```properties
-   # genai-connector tiers of each feature (defaults shown)
+   # genai-connector tier of the tags of a content (default shown); images always use vision
    #llm.tier=lite
-   #alt.tier=lite
+   #image.max.bytes=5242880
    #llm.max.tokens=1024
    #llm.max.source.chars=6000
    #llm.tag.count.max=20

@@ -25,10 +25,18 @@ final class ImagePayload {
     /** The renditions of a {@code jnt:file} image, in the order they are tried. */
     private static final List<String> RENDITIONS = List.of("jcr:content", "thumbnail2", "thumbnail");
 
+    /** The configuration key of the largest rendition sent to the model, for the alternative text and the tags. */
+    static final String MAX_BYTES_KEY = "image.max.bytes";
+
     /** The media types that every chat provider of genai-connector accepts. */
     private static final Set<String> SENDABLE = Set.of("image/jpeg", "image/png", "image/gif", "image/webp");
 
     private ImagePayload() {
+    }
+
+    /** @return the largest rendition that may be sent, from {@value #MAX_BYTES_KEY}: 5 MB by default, 1 KB to 20 MB */
+    static int maxBytes(ConfigValues values) {
+        return values.integer(MAX_BYTES_KEY, 5 * 1024 * 1024, 1024, 20 * 1024 * 1024);
     }
 
     /**
