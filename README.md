@@ -176,6 +176,9 @@ mutation {
 - The model of the tier `vision` receives the original file when it is a JPEG, PNG, GIF or WebP of
   at most `image.max.bytes`, otherwise the thumbnail Jahia generated for the image. An image with neither
   is reported `FAILED`.
+- The prompt also holds the file name and the `jcr:title` of the image, which help the model name the
+  subject. An editor writes both, so they can hold instructions to the model. The answer is cleaned to
+  one line of plain text and cut at `alt.max.length`, so it cannot add markup to a page.
 - Read the text back with `property(name: "jahia_ai_alt", language: "en")`, or edit it in the Content
   Editor, where it shows as the "AI alternative text" field of an image.
 - A rule (`META-INF/rules.drl`) adds `jmix:jahiaAlt` to each image when it is uploaded or replaced,
