@@ -34,7 +34,19 @@ class AltTextCleanerTest {
         String cleaned = AltTextCleaner.clean("A very long description of a sunset over the sea, with boats", 30);
 
         assertTrue(cleaned.length() <= 30);
-        assertEquals("A very long description of a", cleaned);
+        assertEquals("A very long description of a.", cleaned);
+    }
+
+    @Test
+    void aTextThatEndsOnALetterOrADigitGetsAPeriod() {
+        assertEquals("Piscine au coucher du soleil.", AltTextCleaner.clean("Piscine au coucher du soleil", 150));
+        assertEquals("A boat named Sea 2.", AltTextCleaner.clean("A boat named Sea 2", 150));
+        assertEquals("Is it a cat?", AltTextCleaner.clean("Is it a cat?", 150));
+        assertEquals("夕日のプール", AltTextCleaner.clean("夕日のプール", 150));
+        assertEquals("Exactly ten.", AltTextCleaner.clean("Exactly ten", 12));
+        assertEquals("Exactly ten", AltTextCleaner.clean("Exactly ten", 11));
+        assertEquals("Ten chars.", AltTextCleaner.clean("Ten chars.", 10));
+        assertEquals("A boat.", AltTextCleaner.clean("A boat on", 8));
     }
 
     @Test
