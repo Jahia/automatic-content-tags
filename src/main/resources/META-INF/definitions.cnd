@@ -9,4 +9,4 @@
 [jmix:jahiaAlt] mixin
  extends = jmix:image
  itemtype = content
- - jahia_alt (string, textarea) i18n
+ - jahia_ai_alt (string, textarea) i18n

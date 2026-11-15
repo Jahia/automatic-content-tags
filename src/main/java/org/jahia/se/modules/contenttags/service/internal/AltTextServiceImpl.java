@@ -41,7 +41,7 @@ import java.util.function.LongSupplier;
  *
  * <p>For each image it sends one rendition of the picture, with a short instruction, to the model of
  * the genai-connector tier {@code vision}, cleans the answer and saves it in the property of
- * {@code alt.property} (default {@code jahia_alt}), in the locale of the caller's session. It never opens a system session: an image the caller cannot
+ * {@code alt.property} (default {@code jahia_ai_alt}), in the locale of the caller's session. It never opens a system session: an image the caller cannot
  * read is not listed, and an image the caller cannot edit is reported as failed before any model
  * call.</p>
  */

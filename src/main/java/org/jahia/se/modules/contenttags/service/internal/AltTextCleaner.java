@@ -9,7 +9,7 @@ import java.util.Set;
  * Turns the raw answer of a model into an alternative text that can be saved as it is.
  *
  * <p>A model sometimes wraps its answer in quotes or a code fence, prefixes it with a label, or adds
- * markup. The text is stored in {@code jahia_alt} and rendered later inside an {@code alt}
+ * markup. The text is stored in {@code jahia_ai_alt} and rendered later inside an {@code alt}
  * attribute, so it must be one line of plain text no longer than the configured maximum. A text in a
  * script that ends a sentence with a period gets one, so every text reads as a sentence.</p>
  */

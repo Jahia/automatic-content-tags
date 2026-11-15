@@ -8,7 +8,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - Alternative text of images. The mixin `jmix:jahiaAlt` extends `jmix:image` with the i18n
-  property `jahia_alt`, and the GraphQL mutation `generateImageAltText(path, language,
+  property `jahia_ai_alt`, and the GraphQL mutation `generateImageAltText(path, language,
   includeSubNodes, overwrite)` fills it with a vision model, for one image or for every image below
   a path. It runs under the caller's session, saves each image on its own, skips an image that
   already has a text unless `overwrite` is set, and reports one result per image.
@@ -26,7 +26,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   accepts is tagged from its text, on `llm.tier`.
 - Configuration key `image.max.bytes`, the largest image sent to the model, for the alternative text
   and the tags (default 5 MB).
-- Configurable target properties: `alt.property` and `alt.mixin` (default `jahia_alt` on
+- Configurable target properties: `alt.property` and `alt.mixin` (default `jahia_ai_alt` on
   `jmix:jahiaAlt`) for the alternative text, `llm.tag.property` and `llm.tag.mixin` (default
   `j:tagList` on `jmix:tagged`) for the tags. Each pair is checked on the node against that exact
   property name; a single-valued tag property receives the tags joined with ", ".

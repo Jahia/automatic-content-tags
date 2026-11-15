@@ -43,7 +43,7 @@ public final class AltTextMutationExtension {
     @GraphQLName("generateImageAltText")
     @GraphQLDescription("Generates the alternative text of an image, or of the images below a folder, with the "
             + "vision model of genai-connector, and saves it in the configured property (by default the i18n "
-            + "property jahia_alt of the mixin jmix:jahiaAlt) in the edit workspace. Each image is saved on its own; nothing is published.")
+            + "property jahia_ai_alt of the mixin jmix:jahiaAlt) in the edit workspace. Each image is saved on its own; nothing is published.")
     public static GqlAltTextReport generateImageAltText(
             @GraphQLName("path") @GraphQLNonNull
             @GraphQLDescription("The path of an image (jmix:image) or of a node above images") String path,

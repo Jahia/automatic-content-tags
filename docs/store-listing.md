@@ -21,7 +21,7 @@ Generate content tags and image alternative text with AI, through Jahia's genai-
 
 Automatic Content Tags adds an **Auto Tagging** action to the Jahia Content Editor. In one click it reads the text of the content you are editing, sends it to a large language model, and fills the content's tag field with relevant, on-topic tags — in the language you choose. On an image, a vision model looks at the picture, so the tags describe what it shows.
 
-It also writes the **alternative text of images**: a GraphQL mutation sends each image to a vision model and saves its description in the image's `jahia_alt` property, for one image or for a whole folder.
+It also writes the **alternative text of images**: a GraphQL mutation sends each image to a vision model and saves its description in the image's `jahia_ai_alt` property, for one image or for a whole folder.
 
 The module reaches its models through **genai-connector**, Jahia's shared AI connector. The provider, the model and the API key are configured once in genai-connector, for every AI feature of the platform: the Jahia AI gateway, Anthropic, OpenAI, Mistral, Azure OpenAI, Amazon Bedrock or any OpenAI-compatible endpoint.
 
@@ -73,7 +73,7 @@ It is built to Jahia's security and integration standards: the action is POST-on
 Every provider of genai-connector: the Jahia AI gateway, Anthropic, OpenAI, Mistral, Azure OpenAI, Amazon Bedrock and any OpenAI-compatible endpoint. The operator chooses it in genai-connector.
 
 **How is the alternative text of an image generated?**
-The GraphQL mutation `generateImageAltText` sends the image (or its Jahia thumbnail when the original is too large or in another format) to the vision model of the configured tier, and saves the answer in the i18n property `jahia_alt` of the image, in the edit workspace. It skips an image that already has a text unless `overwrite` is true.
+The GraphQL mutation `generateImageAltText` sends the image (or its Jahia thumbnail when the original is too large or in another format) to the vision model of the configured tier, and saves the answer in the i18n property `jahia_ai_alt` of the image, in the edit workspace. It skips an image that already has a text unless `overwrite` is true.
 
 **Do I need an API key, and does it cost anything?**
 genai-connector needs one for its provider, and model usage is billed by that provider. The module itself is free (MIT).

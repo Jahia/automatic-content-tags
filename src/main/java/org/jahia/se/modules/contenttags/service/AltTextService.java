@@ -20,7 +20,7 @@ public interface AltTextService {
     String DEFAULT_ALT_MIXIN = "jmix:jahiaAlt";
 
     /** The property that holds the alternative text, unless {@code alt.property} names another one. */
-    String DEFAULT_ALT_PROPERTY = "jahia_alt";
+    String DEFAULT_ALT_PROPERTY = "jahia_ai_alt";
 
     /**
      * Generates and saves the alternative text of {@code node} when it is an image, and of the

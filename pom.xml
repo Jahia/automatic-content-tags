@@ -36,7 +36,7 @@
     <name>Automatic Content Tags</name>
     <version>2.0.0-SNAPSHOT</version>
     <packaging>bundle</packaging>
-    <description>Generates content tags and image alternative text through genai-connector: a Content Editor action for tags, and a GraphQL mutation that fills jahia_alt on images.</description>
+    <description>Generates content tags and image alternative text through genai-connector: a Content Editor action for tags, and a GraphQL mutation that fills jahia_ai_alt on images.</description>
     <dependencies>
         <!-- The LLM access of the module. No release exists yet: mvn install genai-connector first. -->
         <dependency>

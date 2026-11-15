@@ -4,7 +4,7 @@ This module uses AI to write two kinds of metadata in Jahia:
 
 - **Tags**: an "Auto Tagging" action in the Content Editor fills `j:tagList` with tags generated from
   the text of the content. An image is tagged from its picture, with a vision model.
-- **Alternative text of images**: a GraphQL mutation writes the `jahia_alt` property of an image, or
+- **Alternative text of images**: a GraphQL mutation writes the `jahia_ai_alt` property of an image, or
   of every image below a folder, with a vision model that looks at the picture.
 
 The module reaches its models through [genai-connector](https://github.com/Jahia/genai-connector).
@@ -32,7 +32,7 @@ Compatible with Jahia 8.2 (genai-connector requires 8.2.2). Requires Java 17 to 
 - **Editor controls**: choose the **number of tags** (default 5, up to the admin-configured
   `llm.tag.count.max`) and whether to **replace** the existing tags or **add to** them.
 - **Alternative text of images**: the mixin `jmix:jahiaAlt` extends `jmix:image` with the i18n
-  property `jahia_alt`. The GraphQL mutation `generateImageAltText` fills it for one image, or for
+  property `jahia_ai_alt`. The GraphQL mutation `generateImageAltText` fills it for one image, or for
   every image below a path.
 - **Configurable targets**: the property and mixin that receive the alternative text and the tags come
   from the configuration (`alt.property`, `alt.mixin`, `llm.tag.property`, `llm.tag.mixin`).
@@ -89,7 +89,7 @@ image.max.bytes=5242880       # largest image sent to the model, for the alterna
 
 # --- Alternative text ---
 alt.generate.on.upload=true   # generate the text of each new image, in every site language
-alt.property=jahia_alt        # property that receives the text: a single-valued string
+alt.property=jahia_ai_alt     # property that receives the text: a single-valued string
 alt.mixin=jmix:jahiaAlt       # mixin added before writing; empty when the image types declare it
 alt.max.length=150            # characters of one alternative text (20 to 1000)
 alt.max.images=20             # images sent to the model per call (1 to 500)
@@ -163,7 +163,9 @@ mutation {
 | `resumeFrom` | none | The `resumeFrom` of an earlier report, to continue from that image |
 
 - The text is written in the edit workspace, in the configured property: by default the i18n property
-  `jahia_alt` of the mixin `jmix:jahiaAlt`. Nothing is published.
+  `jahia_ai_alt` of the mixin `jmix:jahiaAlt`. Nothing is published.
+- The name `jahia_ai_alt` marks the text as written by AI, and the help of the field in the Content
+  Editor says that AI must fill it. A template or a script can therefore treat its value as AI-written.
 - Each image is saved on its own, and the images are visited in path order. A call stops with
   `truncated: true` and a `resumeFrom` path when it reaches `alt.max.images` model calls or
   `alt.max.seconds`, at the rate limit of genai-connector, or when the AI provider is busy or
@@ -173,10 +175,10 @@ mutation {
 - The model of the tier `vision` receives the original file when it is a JPEG, PNG, GIF or WebP of
   at most `image.max.bytes`, otherwise the thumbnail Jahia generated for the image. An image with neither
   is reported `FAILED`.
-- Read the text back with `property(name: "jahia_alt", language: "en")`, or edit it in the Content
-  Editor, where it shows as the "Alternative text" section of an image.
+- Read the text back with `property(name: "jahia_ai_alt", language: "en")`, or edit it in the Content
+  Editor, where it shows as the "AI alternative text" field of an image.
 - A rule (`META-INF/rules.drl`) adds `jmix:jahiaAlt` to each image when it is uploaded or replaced,
-  on the same trigger as Jahia's own `jmix:image`, so authors can type the text by hand too.
+  on the same trigger as Jahia's own `jmix:image`, so the Content Editor shows the field on every image.
 - With `alt.generate.on.upload=true` (the default), the same rule also queues the generation of the
   text. A few seconds after the upload, it is written in every language of the image's site, as the
   uploader, without replacing an existing text. The upload itself does not wait for the model, and

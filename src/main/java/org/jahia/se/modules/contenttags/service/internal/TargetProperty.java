@@ -12,7 +12,7 @@ import javax.jcr.nodetype.NoSuchNodeTypeException;
  * A property the module writes, as configured: its name, and the mixin that declares it when the node must
  * get that mixin first. A {@code null} mixin means the node's own types already declare the property.
  *
- * @param property the property name, such as {@code jahia_alt}
+ * @param property the property name, such as {@code jahia_ai_alt}
  * @param mixin    the mixin to add before writing, such as {@code jmix:jahiaAlt}, or {@code null}
  */
 record TargetProperty(String property, String mixin) {
