@@ -151,6 +151,10 @@ public class AltTextUploadAction implements BackgroundAction {
                     LOGGER.info("Alternative text on upload of {} in {}: {}{}", result.path(), language,
                             result.status(), result.message() == null ? "" : " (" + result.message() + ")");
                 }
+                if (report.truncated()) {
+                    // The rate limit or a busy provider stopped the run: the other languages would fail too.
+                    return;
+                }
             } catch (GenAiNotConfiguredException e) {
                 LOGGER.info("No alternative text on upload: genai-connector has no model for it ({})", e.getMessage());
                 return;

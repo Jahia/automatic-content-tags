@@ -102,6 +102,16 @@ class AltTextUploadActionTest {
         assertEquals(List.of(Locale.ENGLISH), opened);
     }
 
+    @Test
+    void aRunStoppedByTheRateLimitOrTheProviderStopsTheOtherLanguages() throws Exception {
+        when(altTextService.fillAltText(any(), anyBoolean(), anyBoolean()))
+                .thenReturn(new AltTextReport(List.of(), true));
+
+        action.generateAll("id", List.of(Locale.ENGLISH, Locale.FRENCH));
+
+        assertEquals(List.of(Locale.ENGLISH), opened);
+    }
+
     private static JCRSiteNode site(String defaultLanguage, String... languages) {
         JCRSiteNode site = mock(JCRSiteNode.class);
         Set<String> all = new LinkedHashSet<>(List.of(languages));

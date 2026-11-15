@@ -218,12 +218,30 @@ class AltTextServiceImplTest {
     }
 
     @Test
+    void aBusyProviderStopsTheRun() throws Exception {
+        JCRNodeWrapper folder = folder("/sites/s/files/album",
+                image("/sites/s/files/album/a.png", null, true),
+                image("/sites/s/files/album/b.png", null, true),
+                image("/sites/s/files/album/c.png", null, true));
+        when(genAi.complete(any()))
+                .thenReturn(result("A photo."))
+                .thenThrow(new GenAiProviderException("busy", true, 429));
+
+        AltTextReport report = service.fillAltText(folder, true, false);
+
+        assertEquals(1, report.count(Status.GENERATED));
+        assertEquals(1, report.count(Status.FAILED));
+        assertTrue(report.truncated());
+        verify(genAi, times(2)).complete(any());
+    }
+
+    @Test
     void aProviderFailureFailsOneImageAndTheRunGoesOn() throws Exception {
         JCRNodeWrapper folder = folder("/sites/s/files/album",
                 image("/sites/s/files/album/a.png", null, true),
                 image("/sites/s/files/album/b.png", null, true));
         when(genAi.complete(any()))
-                .thenThrow(new GenAiProviderException("boom", false, 500))
+                .thenThrow(new GenAiProviderException("bad request", false, 400))
                 .thenReturn(result("A photo."));
 
         AltTextReport report = service.fillAltText(folder, true, false);

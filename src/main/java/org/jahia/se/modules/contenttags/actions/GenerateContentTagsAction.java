@@ -3,8 +3,10 @@ package org.jahia.se.modules.contenttags.actions;
 import org.jahia.bin.Action;
 import org.jahia.bin.ActionResult;
 import org.jahia.modules.genai.api.GenAiNotConfiguredException;
+import org.jahia.modules.genai.api.GenAiProviderException;
 import org.jahia.modules.genai.api.GenAiQuotaExceededException;
 import org.jahia.se.modules.contenttags.service.ContentTagsService;
+import org.jahia.services.content.JCRNodeWrapper;
 import org.jahia.services.content.JCRSessionWrapper;
 import org.jahia.services.render.RenderContext;
 import org.jahia.services.render.Resource;
@@ -61,10 +63,13 @@ public class GenerateContentTagsAction extends Action {
             return new ActionResult(HttpServletResponse.SC_BAD_REQUEST, null, error);
         }
 
-        int numberOfTags = parseInt(getParameter(parameters, "numberOfTags"));
+        return tags(resource.getNode(), tagLanguage, parseInt(getParameter(parameters, "numberOfTags")));
+    }
 
+    /** The tags of the node, or the error to show in the dialog. Package-private for the unit tests. */
+    ActionResult tags(JCRNodeWrapper node, String tagLanguage, int numberOfTags) throws Exception {
         try {
-            List<String> tags = contentTagsService.generateTags(resource.getNode(), tagLanguage, numberOfTags);
+            List<String> tags = contentTagsService.generateTags(node, tagLanguage, numberOfTags);
             JSONObject result = new JSONObject().put("tags", new JSONArray(tags));
             return new ActionResult(HttpServletResponse.SC_OK, null, result);
         } catch (GenAiNotConfiguredException e) {
@@ -75,11 +80,23 @@ public class GenerateContentTagsAction extends Action {
         } catch (GenAiQuotaExceededException e) {
             JSONObject error = new JSONObject().put("error", "Too many AI requests, try again later");
             return new ActionResult(429, null, error);
+        } catch (GenAiProviderException e) {
+            if (!e.isRetryable()) {
+                return failed(node, e);
+            }
+            LOGGER.warn("The AI provider is busy or unavailable for node {}: {}", node.getPath(), e.getMessage());
+            JSONObject error = new JSONObject().put("error", "The AI provider is busy or unavailable, try again later");
+            return new ActionResult(e.statusCode().filter(status -> status == 429).isPresent()
+                    ? 429 : HttpServletResponse.SC_SERVICE_UNAVAILABLE, null, error);
         } catch (Exception e) {
-            LOGGER.error("Tag generation failed for node {}", resource.getNode().getPath(), e);
-            JSONObject error = new JSONObject().put("error", "Tag generation failed, see server log");
-            return new ActionResult(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, null, error);
+            return failed(node, e);
         }
+    }
+
+    private static ActionResult failed(JCRNodeWrapper node, Exception e) throws Exception {
+        LOGGER.error("Tag generation failed for node {}", node.getPath(), e);
+        JSONObject error = new JSONObject().put("error", "Tag generation failed, see server log");
+        return new ActionResult(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, null, error);
     }
 
     /**

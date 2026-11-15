@@ -103,6 +103,14 @@ public class AltTextServiceImpl implements AltTextService {
                         "The AI rate limit is reached, try again later"));
                 truncated = true;
                 break;
+            } catch (GenAiProviderException e) {
+                // Only a retryable failure gets here, and genai-connector already retried it: the next
+                // image would meet the same busy or broken provider.
+                LOGGER.warn("The model call failed for the image {}, the run stops: {}", path, e.getMessage());
+                results.add(new AltTextResult(path, AltTextResult.Status.FAILED, null,
+                        "The AI provider is busy or unavailable, try again later"));
+                truncated = true;
+                break;
             } catch (RepositoryException e) {
                 LOGGER.warn("Unable to process the image {}", path, e);
                 results.add(new AltTextResult(path, AltTextResult.Status.FAILED, null, "The image cannot be read"));
@@ -224,6 +232,9 @@ public class AltTextServiceImpl implements AltTextService {
                     .temperature(cfg.temperature())
                     .build());
         } catch (GenAiProviderException e) {
+            if (e.isRetryable()) {
+                throw e;
+            }
             LOGGER.warn("The model call failed for the image {}: {}", path, e.getMessage());
             return new AltTextResult(path, AltTextResult.Status.FAILED, existing, "The model call failed");
         }
