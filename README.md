@@ -82,7 +82,7 @@ llm.tag.count.max=20          # most tags a request may generate (hard-capped at
 llm.tag.count.default=5       # tag count when the dialog sends none
 llm.max.tokens=1024
 llm.max.source.chars=6000     # characters of content text sent to the model
-llm.temperature=              # empty = provider default; also used for the alternative text
+llm.temperature=              # empty = provider default, for the tags
 image.max.bytes=5242880       # largest image sent to the model, for the alternative text and the tags;
                               # a larger original is replaced by its Jahia thumbnail
 #llm.user.prompt=Respond ONLY with a JSON array of concise single- or two-word strings, without markdown, explanations or duplicates.
@@ -95,6 +95,7 @@ alt.max.length=150            # characters of one alternative text (20 to 1000)
 alt.max.images=20             # images sent to the model per call (1 to 500)
 alt.max.seconds=60            # no new model call after this time in one call (5 to 600)
 alt.max.tokens=300
+alt.temperature=              # empty = provider default, for the alternative text
 #alt.prompt=                  # replaces the built-in instructions
 ```
 

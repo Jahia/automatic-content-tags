@@ -320,7 +320,7 @@ public class AltTextServiceImpl implements AltTextService {
                     values.integer("alt.max.seconds", 60, 5, 600),
                     ImagePayload.maxBytes(values),
                     values.integer("alt.max.tokens", 300, 16, 8192),
-                    values.decimal("llm.temperature"));
+                    values.decimal("alt.temperature"));
         }
     }
 }

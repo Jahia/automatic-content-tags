@@ -29,6 +29,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -135,6 +136,19 @@ class AltTextServiceImplTest {
         assertEquals("image/png", request.getValue().images().get(0).mediaType());
         assertTrue(request.getValue().input().contains("French"));
         assertTrue(request.getValue().input().contains("cat.png"));
+    }
+
+    @Test
+    void theAltTextUsesItsOwnTemperature() throws Exception {
+        service.configure(Map.of("alt.temperature", "0.2", "llm.temperature", "0.9"));
+        JCRNodeWrapper image = image("/sites/s/files/cat.png", null, true);
+        answer("A grey cat.");
+
+        service.fillAltText(image, false, false, null);
+
+        ArgumentCaptor<CompletionRequest> request = ArgumentCaptor.forClass(CompletionRequest.class);
+        verify(genAi).complete(request.capture());
+        assertEquals(Optional.of(0.2), request.getValue().temperature());
     }
 
     @Test
