@@ -10,6 +10,7 @@ import org.jahia.modules.genai.api.ModelTier;
 import org.jahia.modules.genai.api.StopReason;
 import org.jahia.modules.genai.api.Usage;
 import org.jahia.se.modules.contenttags.service.AltTextReport;
+import org.jahia.se.modules.contenttags.service.AltTextResult;
 import org.jahia.se.modules.contenttags.service.AltTextResult.Status;
 import org.jahia.se.modules.contenttags.service.AltTextService;
 import org.jahia.services.content.JCRNodeIteratorWrapper;
@@ -28,6 +29,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -77,7 +80,7 @@ class AltTextServiceImplTest {
         JCRNodeWrapper image = image("/sites/s/files/cat.png", null, true);
         answer("A grey cat.");
 
-        AltTextReport report = service.fillAltText(image, false, false);
+        AltTextReport report = service.fillAltText(image, false, false, null);
 
         assertEquals(1, report.count(Status.GENERATED));
         assertEquals(new TargetProperty("jcr:description", "jmix:description"), resolvedTarget);
@@ -92,7 +95,7 @@ class AltTextServiceImplTest {
         JCRNodeWrapper image = image("/sites/s/files/cat.png", null, true);
         answer("A grey cat.");
 
-        service.fillAltText(image, false, false);
+        service.fillAltText(image, false, false, null);
 
         verify(image, never()).addMixin(anyString());
         verify(image).setProperty("jcr:description", "A grey cat.");
@@ -103,9 +106,9 @@ class AltTextServiceImplTest {
         JCRNodeWrapper image = image("/sites/s/files/cat.png", null, true);
 
         definition = null;
-        assertEquals(1, service.fillAltText(image, false, false).count(Status.FAILED));
+        assertEquals(1, service.fillAltText(image, false, false, null).count(Status.FAILED));
         definition = textDefinition(true);
-        assertEquals(1, service.fillAltText(image, false, false).count(Status.FAILED));
+        assertEquals(1, service.fillAltText(image, false, false, null).count(Status.FAILED));
 
         verify(genAi, never()).complete(any());
         verify(image, never()).setProperty(anyString(), anyString());
@@ -116,7 +119,7 @@ class AltTextServiceImplTest {
         JCRNodeWrapper image = image("/sites/s/files/cat.png", null, true);
         answer("\"A grey cat asleep on a sofa.\"");
 
-        AltTextReport report = service.fillAltText(image, false, false);
+        AltTextReport report = service.fillAltText(image, false, false, null);
 
         assertEquals(1, report.count(Status.GENERATED));
         assertFalse(report.truncated());
@@ -139,12 +142,12 @@ class AltTextServiceImplTest {
         JCRNodeWrapper image = image("/sites/s/files/cat.png", "Already written", true);
         answer("A grey cat.");
 
-        AltTextReport kept = service.fillAltText(image, false, false);
+        AltTextReport kept = service.fillAltText(image, false, false, null);
         assertEquals(1, kept.count(Status.SKIPPED));
         assertEquals("Already written", kept.images().get(0).altText());
         verify(genAi, never()).complete(any());
 
-        AltTextReport replaced = service.fillAltText(image, false, true);
+        AltTextReport replaced = service.fillAltText(image, false, true, null);
         assertEquals(1, replaced.count(Status.GENERATED));
         verify(image).setProperty(AltTextService.DEFAULT_ALT_PROPERTY, "A grey cat.");
     }
@@ -153,7 +156,7 @@ class AltTextServiceImplTest {
     void anImageTheUserCannotEditCostsNoModelCall() throws Exception {
         JCRNodeWrapper image = image("/sites/s/files/cat.png", null, false);
 
-        AltTextReport report = service.fillAltText(image, false, false);
+        AltTextReport report = service.fillAltText(image, false, false, null);
 
         assertEquals(1, report.count(Status.FAILED));
         verify(genAi, never()).complete(any());
@@ -170,12 +173,56 @@ class AltTextServiceImplTest {
                 image("/sites/s/files/album/d.png", null, true));
         answer("A photo.");
 
-        AltTextReport report = service.fillAltText(folder, true, false);
+        AltTextReport report = service.fillAltText(folder, true, false, null);
 
         assertEquals(2, report.count(Status.GENERATED));
         assertEquals(1, report.count(Status.SKIPPED));
         assertTrue(report.truncated());
         verify(genAi, times(2)).complete(any());
+    }
+
+    @Test
+    void aStoppedRunResumesFromTheImageItLeftInPathOrder() throws Exception {
+        service.configure(Map.of("alt.max.images", "2"));
+        JCRNodeWrapper a = image("/sites/s/files/album/a.png", null, true);
+        JCRNodeWrapper b = image("/sites/s/files/album/b.png", null, true);
+        JCRNodeWrapper c = image("/sites/s/files/album/c.png", null, true);
+        JCRNodeWrapper d = image("/sites/s/files/album/d.png", null, true);
+        answer("A photo.");
+
+        AltTextReport first = service.fillAltText(folder("/sites/s/files/album", c, a, d, b), true, true, null);
+
+        assertEquals(List.of("/sites/s/files/album/a.png", "/sites/s/files/album/b.png"),
+                first.images().stream().map(AltTextResult::path).toList());
+        assertEquals("/sites/s/files/album/c.png", first.resumeFrom());
+
+        AltTextReport second = service.fillAltText(folder("/sites/s/files/album", c, a, d, b), true, true,
+                first.resumeFrom());
+
+        assertEquals(List.of("/sites/s/files/album/c.png", "/sites/s/files/album/d.png"),
+                second.images().stream().map(AltTextResult::path).toList());
+        assertFalse(second.truncated());
+        verify(genAi, times(4)).complete(any());
+    }
+
+    @Test
+    void theTimeLimitStopsTheRunBeforeTheNextModelCall() throws Exception {
+        service.configure(Map.of("alt.max.seconds", "5"));
+        AtomicLong clock = new AtomicLong();
+        service.nanoTime = clock::get;
+        when(genAi.complete(any())).thenAnswer(invocation -> {
+            clock.addAndGet(TimeUnit.SECONDS.toNanos(6));
+            return result("A photo.");
+        });
+        JCRNodeWrapper folder = folder("/sites/s/files/album",
+                image("/sites/s/files/album/a.png", null, true),
+                image("/sites/s/files/album/b.png", null, true));
+
+        AltTextReport report = service.fillAltText(folder, true, false, null);
+
+        assertEquals(1, report.count(Status.GENERATED));
+        assertEquals("/sites/s/files/album/b.png", report.resumeFrom());
+        verify(genAi, times(1)).complete(any());
     }
 
     @Test
@@ -190,7 +237,7 @@ class AltTextServiceImplTest {
                 image("/sites/s/files/album/d.png", null, true));
         answer("A photo.");
 
-        AltTextReport report = service.fillAltText(folder, true, false);
+        AltTextReport report = service.fillAltText(folder, true, false, null);
 
         assertEquals(2, report.count(Status.FAILED));
         assertEquals(1, report.count(Status.GENERATED));
@@ -209,7 +256,7 @@ class AltTextServiceImplTest {
                 .thenReturn(result("A photo."))
                 .thenThrow(new GenAiQuotaExceededException("limit"));
 
-        AltTextReport report = service.fillAltText(folder, true, false);
+        AltTextReport report = service.fillAltText(folder, true, false, null);
 
         assertEquals(1, report.count(Status.GENERATED));
         assertEquals(1, report.count(Status.FAILED));
@@ -227,7 +274,7 @@ class AltTextServiceImplTest {
                 .thenReturn(result("A photo."))
                 .thenThrow(new GenAiProviderException("busy", true, 429));
 
-        AltTextReport report = service.fillAltText(folder, true, false);
+        AltTextReport report = service.fillAltText(folder, true, false, null);
 
         assertEquals(1, report.count(Status.GENERATED));
         assertEquals(1, report.count(Status.FAILED));
@@ -244,7 +291,7 @@ class AltTextServiceImplTest {
                 .thenThrow(new GenAiProviderException("bad request", false, 400))
                 .thenReturn(result("A photo."));
 
-        AltTextReport report = service.fillAltText(folder, true, false);
+        AltTextReport report = service.fillAltText(folder, true, false, null);
 
         assertEquals(1, report.count(Status.FAILED));
         assertEquals(1, report.count(Status.GENERATED));
@@ -265,7 +312,7 @@ class AltTextServiceImplTest {
             return null;
         }).when(session).refresh(false);
 
-        AltTextReport report = service.fillAltText(image, false, false);
+        AltTextReport report = service.fillAltText(image, false, false, null);
 
         assertEquals(1, report.count(Status.SKIPPED));
         assertEquals("Written elsewhere", report.images().get(0).altText());
@@ -277,7 +324,7 @@ class AltTextServiceImplTest {
         answer("A grey cat.");
         doThrow(new InvalidItemStateException("modified externally")).when(session).save();
 
-        AltTextReport report = service.fillAltText(image, false, false);
+        AltTextReport report = service.fillAltText(image, false, false, null);
 
         assertEquals(1, report.count(Status.FAILED));
         verify(session).refresh(false);
@@ -291,7 +338,7 @@ class AltTextServiceImplTest {
         when(session.getNode("/sites/s/files/cat.png")).thenReturn(fresh);
         answer("A grey cat.");
 
-        AltTextReport report = service.fillAltText(stale, false, false);
+        AltTextReport report = service.fillAltText(stale, false, false, null);
 
         assertEquals(1, report.count(Status.GENERATED));
         verify(fresh).setProperty(AltTextService.DEFAULT_ALT_PROPERTY, "A grey cat.");
@@ -304,7 +351,7 @@ class AltTextServiceImplTest {
         JCRNodeWrapper folder = folder("/sites/s/files/album", broken, image("/sites/s/files/album/b.png", null, true));
         answer("A photo.");
 
-        AltTextReport report = service.fillAltText(folder, true, false);
+        AltTextReport report = service.fillAltText(folder, true, false, null);
 
         assertEquals(1, report.count(Status.FAILED));
         assertEquals(1, report.count(Status.GENERATED));
@@ -315,7 +362,7 @@ class AltTextServiceImplTest {
         JCRNodeWrapper image = image("/sites/s/files/cat.png", null, true);
         when(genAi.complete(any())).thenThrow(new GenAiNotConfiguredException("no lite tier"));
 
-        assertThrows(GenAiNotConfiguredException.class, () -> service.fillAltText(image, false, false));
+        assertThrows(GenAiNotConfiguredException.class, () -> service.fillAltText(image, false, false, null));
     }
 
     private static ExtendedPropertyDefinition textDefinition(boolean multiple) {

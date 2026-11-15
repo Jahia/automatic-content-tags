@@ -5,14 +5,20 @@ import java.util.List;
 /**
  * The outcome of one {@link AltTextService#fillAltText} invocation.
  *
- * @param images    one result per image visited, in the order they were processed
- * @param truncated true when images that still needed a text were left because the invocation reached
- *                  its image limit or the rate limit of genai-connector; call again to continue
+ * @param images     one result per image visited, in path order
+ * @param resumeFrom the path of the first image left when the invocation stopped early: at its image limit, at
+ *                   its time limit, at the rate limit of genai-connector, or on a busy provider. {@code null}
+ *                   when every image was visited. Pass it back to continue from that image
  */
-public record AltTextReport(List<AltTextResult> images, boolean truncated) {
+public record AltTextReport(List<AltTextResult> images, String resumeFrom) {
 
     public AltTextReport {
         images = List.copyOf(images);
+    }
+
+    /** @return true when images that may still need a text were left */
+    public boolean truncated() {
+        return resumeFrom != null;
     }
 
     /** @return how many images have the given status */

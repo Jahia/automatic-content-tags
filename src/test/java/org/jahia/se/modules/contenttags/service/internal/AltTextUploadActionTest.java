@@ -82,19 +82,19 @@ class AltTextUploadActionTest {
 
     @Test
     void eachLanguageIsFilledWithoutOverwriting() throws Exception {
-        when(altTextService.fillAltText(any(), anyBoolean(), anyBoolean()))
-                .thenReturn(new AltTextReport(List.of(), false));
+        when(altTextService.fillAltText(any(), anyBoolean(), anyBoolean(), any()))
+                .thenReturn(new AltTextReport(List.of(), null));
 
         action.generateAll("id", List.of(Locale.ENGLISH, Locale.FRENCH));
 
         assertEquals(List.of(Locale.ENGLISH, Locale.FRENCH), opened);
         verify(altTextService, times(2)).fillAltText(any(), org.mockito.ArgumentMatchers.eq(false),
-                org.mockito.ArgumentMatchers.eq(false));
+                org.mockito.ArgumentMatchers.eq(false), org.mockito.ArgumentMatchers.isNull());
     }
 
     @Test
     void aConnectorWithoutModelStopsTheOtherLanguages() throws Exception {
-        when(altTextService.fillAltText(any(), anyBoolean(), anyBoolean()))
+        when(altTextService.fillAltText(any(), anyBoolean(), anyBoolean(), any()))
                 .thenThrow(new GenAiNotConfiguredException("no lite tier"));
 
         action.generateAll("id", List.of(Locale.ENGLISH, Locale.FRENCH));
@@ -104,8 +104,8 @@ class AltTextUploadActionTest {
 
     @Test
     void aRunStoppedByTheRateLimitOrTheProviderStopsTheOtherLanguages() throws Exception {
-        when(altTextService.fillAltText(any(), anyBoolean(), anyBoolean()))
-                .thenReturn(new AltTextReport(List.of(), true));
+        when(altTextService.fillAltText(any(), anyBoolean(), anyBoolean(), any()))
+                .thenReturn(new AltTextReport(List.of(), "/sites/s/files/a.png"));
 
         action.generateAll("id", List.of(Locale.ENGLISH, Locale.FRENCH));
 

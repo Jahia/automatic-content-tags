@@ -53,7 +53,11 @@ public final class AltTextMutationExtension {
             @GraphQLDescription("Also process the images below the node. Default false") Boolean includeSubNodes,
             @GraphQLName("overwrite") @GraphQLDefaultValue(GqlUtils.SupplierFalse.class)
             @GraphQLDescription("Replace an existing alternative text. Default false: such an image is skipped")
-            Boolean overwrite) {
+            Boolean overwrite,
+            @GraphQLName("resumeFrom")
+            @GraphQLDescription("The resumeFrom of an earlier report that stopped early, to continue from that image. "
+                    + "The images are visited in path order")
+            String resumeFrom) {
         JahiaUser user = JCRSessionFactory.getInstance().getCurrentUser();
         if (user == null || JahiaUserManagerService.isGuest(user)) {
             throw new DataFetchingException("Generating alternative text requires an authenticated user");
@@ -72,7 +76,7 @@ public final class AltTextMutationExtension {
                 throw new GqlJcrWrongInputException(path + " is not an image (jmix:image); set includeSubNodes "
                         + "to true to process the images below it");
             }
-            return new GqlAltTextReport(service().fillAltText(node, subNodes, Boolean.TRUE.equals(overwrite)));
+            return new GqlAltTextReport(service().fillAltText(node, subNodes, Boolean.TRUE.equals(overwrite), resumeFrom));
         } catch (PathNotFoundException e) {
             throw new GqlJcrWrongInputException("No node at " + path + " that the current user can read", e);
         } catch (GenAiNotConfiguredException e) {

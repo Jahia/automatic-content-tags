@@ -30,7 +30,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
+import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 
 /**
  * Default {@link AltTextService} implementation.
@@ -57,6 +61,9 @@ public class AltTextServiceImpl implements AltTextService {
     @Reference
     GenAiService genAi;
 
+    // Package-private for the unit tests, which move the clock.
+    LongSupplier nanoTime = System::nanoTime;
+
     private volatile Config config = Config.from(ConfigValues.of(Map.of()));
 
     @Activate
@@ -64,19 +71,24 @@ public class AltTextServiceImpl implements AltTextService {
     void configure(Map<String, Object> properties) {
         config = Config.from(ConfigValues.of(properties));
         LOGGER.info("Automatic Content Tags configured: alternative text in {}, on the genai-connector tier '{}' ({}), "
-                        + "at most {} images per call", config.target(), ModelTier.VISION.id(),
-                genAi.isAvailable(ModelTier.VISION) ? "available" : "not configured yet", config.maxImages());
+                        + "at most {} images and {} seconds per call", config.target(), ModelTier.VISION.id(),
+                genAi.isAvailable(ModelTier.VISION) ? "available" : "not configured yet", config.maxImages(),
+                config.maxSeconds());
     }
 
     @Override
-    public AltTextReport fillAltText(JCRNodeWrapper node, boolean includeSubNodes, boolean overwrite)
-            throws RepositoryException {
+    public AltTextReport fillAltText(JCRNodeWrapper node, boolean includeSubNodes, boolean overwrite,
+                                     String resumeFrom) throws RepositoryException {
         Config cfg = config;
+        long deadline = nanoTime.getAsLong() + TimeUnit.SECONDS.toNanos(cfg.maxSeconds());
         List<AltTextResult> results = new ArrayList<>();
         // Only the images sent to the model count: a skipped or refused image costs nothing.
         int modelCalls = 0;
-        boolean truncated = false;
-        for (JCRNodeWrapper listed : images(node, includeSubNodes)) {
+        NavigableMap<String, JCRNodeWrapper> images = images(node, includeSubNodes);
+        if (resumeFrom != null) {
+            images = images.tailMap(resumeFrom, true);
+        }
+        for (JCRNodeWrapper listed : images.values()) {
             String path = listed.getPath();
             try {
                 JCRNodeWrapper image = listed;
@@ -92,31 +104,29 @@ public class AltTextServiceImpl implements AltTextService {
                     results.add(prepared.result());
                     continue;
                 }
-                if (modelCalls == cfg.maxImages()) {
-                    truncated = true;
-                    break;
+                // The time limit leaves the first call alone, so that every invocation moves forward.
+                if (modelCalls == cfg.maxImages() || modelCalls > 0 && nanoTime.getAsLong() - deadline >= 0) {
+                    return new AltTextReport(results, path);
                 }
                 modelCalls++;
                 results.add(generate(image, prepared, overwrite, cfg));
             } catch (GenAiQuotaExceededException e) {
                 results.add(new AltTextResult(path, AltTextResult.Status.FAILED, null,
                         "The AI rate limit is reached, try again later"));
-                truncated = true;
-                break;
+                return new AltTextReport(results, path);
             } catch (GenAiProviderException e) {
                 // Only a retryable failure gets here, and genai-connector already retried it: the next
                 // image would meet the same busy or broken provider.
                 LOGGER.warn("The model call failed for the image {}, the run stops: {}", path, e.getMessage());
                 results.add(new AltTextResult(path, AltTextResult.Status.FAILED, null,
                         "The AI provider is busy or unavailable, try again later"));
-                truncated = true;
-                break;
+                return new AltTextReport(results, path);
             } catch (RepositoryException e) {
                 LOGGER.warn("Unable to process the image {}", path, e);
                 results.add(new AltTextResult(path, AltTextResult.Status.FAILED, null, "The image cannot be read"));
             }
         }
-        return new AltTextReport(results, truncated);
+        return new AltTextReport(results, null);
     }
 
     private static AltTextResult skipped(String path, String existing) {
@@ -139,12 +149,15 @@ public class AltTextServiceImpl implements AltTextService {
         return config.maxImages();
     }
 
-    /** The node itself when it is an image, then the images below it when asked. */
-    private static List<JCRNodeWrapper> images(JCRNodeWrapper node, boolean includeSubNodes)
+    /**
+     * The node itself when it is an image, then the images below it when asked, by path. The path order is the
+     * same on every invocation, so a later invocation can resume where an earlier one stopped.
+     */
+    private static NavigableMap<String, JCRNodeWrapper> images(JCRNodeWrapper node, boolean includeSubNodes)
             throws RepositoryException {
-        List<JCRNodeWrapper> images = new ArrayList<>();
+        NavigableMap<String, JCRNodeWrapper> images = new TreeMap<>();
         if (node.isNodeType("jmix:image")) {
-            images.add(node);
+            images.put(node.getPath(), node);
         }
         if (includeSubNodes) {
             String statement = "SELECT * FROM [jmix:image] AS image WHERE ISDESCENDANTNODE(image, ['"
@@ -152,7 +165,8 @@ public class AltTextServiceImpl implements AltTextService {
             NodeIterator found = node.getSession().getWorkspace().getQueryManager()
                     .createQuery(statement, Query.JCR_SQL2).execute().getNodes();
             while (found.hasNext()) {
-                images.add((JCRNodeWrapper) found.nextNode());
+                JCRNodeWrapper image = (JCRNodeWrapper) found.nextNode();
+                images.put(image.getPath(), image);
             }
         }
         return images;
@@ -293,7 +307,7 @@ public class AltTextServiceImpl implements AltTextService {
     /**
      * Immutable configuration snapshot.
      */
-    record Config(TargetProperty target, String instructions, int maxLength, int maxImages,
+    record Config(TargetProperty target, String instructions, int maxLength, int maxImages, int maxSeconds,
                   int maxImageBytes, int maxTokens, Double temperature) {
 
         static Config from(ConfigValues values) {
@@ -303,6 +317,7 @@ public class AltTextServiceImpl implements AltTextService {
                     values.string("alt.prompt", DEFAULT_INSTRUCTIONS),
                     values.integer("alt.max.length", 150, 20, 1000),
                     values.integer("alt.max.images", 20, 1, 500),
+                    values.integer("alt.max.seconds", 60, 5, 600),
                     ImagePayload.maxBytes(values),
                     values.integer("alt.max.tokens", 300, 16, 8192),
                     values.decimal("llm.temperature"));

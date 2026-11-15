@@ -146,7 +146,7 @@ public class AltTextUploadAction implements BackgroundAction {
     void generateAll(String identifier, List<Locale> languages) {
         for (Locale language : languages) {
             try {
-                AltTextReport report = altTextService.fillAltText(imageIn(identifier, language), false, false);
+                AltTextReport report = altTextService.fillAltText(imageIn(identifier, language), false, false, null);
                 for (AltTextResult result : report.images()) {
                     LOGGER.info("Alternative text on upload of {} in {}: {}{}", result.path(), language,
                             result.status(), result.message() == null ? "" : " (" + result.message() + ")");

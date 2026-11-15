@@ -17,7 +17,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Alternative text at upload: with `alt.generate.on.upload=true` (the default), the text of each new
   image is generated a few seconds after the upload, in every site language, as the uploader. An
   existing text is never replaced.
-- Configuration keys `alt.max.length`, `alt.max.images`, `alt.max.tokens` and `alt.prompt`.
+- Configuration keys `alt.max.length`, `alt.max.images`, `alt.max.seconds`, `alt.max.tokens` and `alt.prompt`.
 - The alternative text and the tags of an image use the genai-connector tier `vision`, whose model
   reads images. The operator chooses that model in genai-connector, so this module has no tier key
   for images.

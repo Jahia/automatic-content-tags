@@ -30,19 +30,22 @@ public interface AltTextService {
      * configured mixin; otherwise the image fails before any model call. An image that already has a value
      * in that property, in the session locale for an i18n property, is skipped unless
      * {@code overwrite} is true. Each image is saved on its own, so the images done before a failure
-     * keep their text. At most {@link #getMaxImages()} images get a model call per invocation; the
-     * report says when more were left.</p>
+     * keep their text. The images are visited in path order. An invocation makes at most
+     * {@link #getMaxImages()} model calls, and makes no new call once it has run for {@code alt.max.seconds};
+     * the report then names the image to resume from.</p>
      *
      * @param node            the image or the folder, read through the calling user's session in the
      *                        target locale
      * @param includeSubNodes whether to process the images below {@code node}
      * @param overwrite       whether to replace an existing alternative text
+     * @param resumeFrom      the {@link AltTextReport#resumeFrom()} of an earlier invocation, to start at that
+     *                        image; {@code null} to start at the first image
      * @return one result per image visited
      * @throws org.jahia.modules.genai.api.GenAiNotConfiguredException when genai-connector has no
      *         model for the tier {@code vision}
      * @throws RepositoryException when the images cannot be listed
      */
-    AltTextReport fillAltText(JCRNodeWrapper node, boolean includeSubNodes, boolean overwrite)
+    AltTextReport fillAltText(JCRNodeWrapper node, boolean includeSubNodes, boolean overwrite, String resumeFrom)
             throws RepositoryException;
 
     /** @return the most images that one invocation sends to the model ({@code alt.max.images}) */

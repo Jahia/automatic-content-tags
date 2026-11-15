@@ -93,6 +93,7 @@ alt.property=jahia_alt        # property that receives the text: a single-valued
 alt.mixin=jmix:jahiaAlt       # mixin added before writing; empty when the image types declare it
 alt.max.length=150            # characters of one alternative text (20 to 1000)
 alt.max.images=20             # images sent to the model per call (1 to 500)
+alt.max.seconds=60            # no new model call after this time in one call (5 to 600)
 alt.max.tokens=300
 #alt.prompt=                  # replaces the built-in instructions
 ```
@@ -147,7 +148,7 @@ Call the mutation on `/modules/graphql` as an authenticated editor:
 mutation {
   generateImageAltText(path: "/sites/digitall/files/images", language: "en",
                        includeSubNodes: true, overwrite: false) {
-    generated skipped failed truncated
+    generated skipped failed truncated resumeFrom
     images { path status altText message }
   }
 }
@@ -159,12 +160,16 @@ mutation {
 | `language` | required | The language of the text, one of the site languages |
 | `includeSubNodes` | `false` | Also process every image below `path` |
 | `overwrite` | `false` | Replace an existing alternative text; otherwise such an image is `SKIPPED` |
+| `resumeFrom` | none | The `resumeFrom` of an earlier report, to continue from that image |
 
 - The text is written in the edit workspace, in the configured property: by default the i18n property
   `jahia_alt` of the mixin `jmix:jahiaAlt`. Nothing is published.
-- Each image is saved on its own. When a call reaches `alt.max.images` or the rate limit of
-  genai-connector, it stops with `truncated: true`; call it again to continue, since the images done
-  are skipped.
+- Each image is saved on its own, and the images are visited in path order. A call stops with
+  `truncated: true` and a `resumeFrom` path when it reaches `alt.max.images` model calls or
+  `alt.max.seconds`, at the rate limit of genai-connector, or when the AI provider is busy or
+  unavailable. Call it again with that `resumeFrom` to continue, also with `overwrite: true`.
+- `images` lists the generated and failed images. Ask `images(includeSkipped: true)` to also list
+  the skipped ones; `skipped` counts them in both cases.
 - The model of the tier `vision` receives the original file when it is a JPEG, PNG, GIF or WebP of
   at most `image.max.bytes`, otherwise the thumbnail Jahia generated for the image. An image with neither
   is reported `FAILED`.
