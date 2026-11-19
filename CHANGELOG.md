@@ -4,6 +4,48 @@ All notable changes to this module are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - Unreleased
+
+### Added
+- Alternative text of images. The mixin `jmix:jahiaAlt` extends `jmix:image` with the i18n
+  property `jahia_ai_alt`, and the GraphQL mutation `generateImageAltText(path, language,
+  includeSubNodes, overwrite)` fills it with a vision model, for one image or for every image below
+  a path. It runs under the caller's session, saves each image on its own, skips an image that
+  already has a text unless `overwrite` is set, and reports one result per image.
+- A rule adds `jmix:jahiaAlt` to each uploaded image, like Jahia adds `jmix:image`, so the Content
+  Editor shows the alternative text field on every new image.
+- Alternative text at upload: with `alt.generate.on.upload=true` (the default), the text of each new
+  image is generated a few seconds after the upload, in every site language, as the uploader. An
+  existing text is never replaced.
+- Configuration keys `alt.max.length`, `alt.max.images`, `alt.max.seconds`, `alt.max.tokens`, `alt.temperature` and `alt.prompt`. `llm.temperature` now applies to the tags only.
+- The alternative text and the tags of an image use the ai-assistant tier `vision`, whose model
+  reads images. The operator chooses that model in ai-assistant, so this module has no tier key
+  for images.
+- Tags of an image: the Auto Tagging action now shows on images (`jmix:image`), and the model sees
+  the picture with the file name and the text of the image. An image with no rendition the model
+  accepts is tagged from its text, on `llm.tier`.
+- Configuration key `image.max.bytes`, the largest image sent to the model, for the alternative text
+  and the tags (default 5 MB).
+- Configurable target properties: `alt.property` and `alt.mixin` (default `jahia_ai_alt` on
+  `jmix:jahiaAlt`) for the alternative text, `llm.tag.property` and `llm.tag.mixin` (default
+  `j:tagList` on `jmix:tagged`) for the tags. Each pair is checked on the node against that exact
+  property name; a single-valued tag property receives the tags joined with ", ".
+- Configuration key `llm.tier`, the ai-assistant tier of the tags of a content from its text
+  (default `lite`).
+- Unit tests (JUnit 5, Mockito).
+
+### Changed
+- **Breaking**: the module calls its models through ai-assistant, which is now a required
+  dependency. ai-assistant holds the former genai-connector, and needs Jahia 8.2.3.2. The provider,
+  the model and the API key are configured in ai-assistant. The keys `llm.provider` and
+  `anthropic.*`, `openai.*`, `deepseek.*` are no longer read.
+- The tagging action answers HTTP 503 when ai-assistant has no model for the tier, and HTTP 429
+  when the user reached its rate limit.
+
+### Removed
+- **Breaking**: the built-in Anthropic, OpenAI and DeepSeek providers and the exported
+  `org.jahia.se.modules.contenttags.service.spi` package (`LlmProvider`, `LlmSettings`).
+
 ## [1.0.1] - 2026-10-07
 
 ### Added

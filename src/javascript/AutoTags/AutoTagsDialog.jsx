@@ -9,7 +9,9 @@ const MIN_TAG_COUNT = 1;
 // Used only until the server configuration is fetched (or if that fetch fails).
 const FALLBACK_DEFAULT_TAG_COUNT = 5;
 const FALLBACK_MAX_TAG_COUNT = 20;
-const TAG_LIST_FIELD = 'jmix:tagged_j:tagList';
+// The default tag target (llm.tag.property=j:tagList, llm.tag.mixin=jmix:tagged), used until the server
+// configuration is fetched (or if that fetch fails).
+const FALLBACK_TAG_TARGET = {property: 'j:tagList', mixin: 'jmix:tagged', field: 'jmix:tagged_j:tagList', multiple: true};
 
 const clampCount = (value, max, fallback) => {
     const parsed = parseInt(value, 10);
@@ -19,6 +21,19 @@ const clampCount = (value, max, fallback) => {
 
     return Math.min(max, Math.max(MIN_TAG_COUNT, parsed));
 };
+
+// The form field of the target: the one the server named, else a field of the form with the same property.
+const resolveField = (values, target) => {
+    const keys = Object.keys(values || {});
+    if (keys.includes(target.field)) {
+        return target.field;
+    }
+
+    return keys.find(key => key.endsWith(`_${target.property}`)) || target.field;
+};
+
+// A single-valued target holds the tags as one comma-separated string.
+const splitTags = value => (typeof value === 'string' ? value.split(',').map(tag => tag.trim()).filter(Boolean) : value);
 
 const mergeTags = (existing, generated) => {
     const merged = (Array.isArray(existing) ? existing : []).filter(tag => typeof tag === 'string');
@@ -52,6 +67,8 @@ export const AutoTagsDialog = ({
     const [replaceExisting, setReplaceExisting] = useState(true);
     const [loadingQuery, setLoadingQuery] = useState(false);
     const [errorMessage, setErrorMessage] = useState(null);
+    const [tagTarget, setTagTarget] = useState(FALLBACK_TAG_TARGET);
+    const [targetUnavailable, setTargetUnavailable] = useState(false);
 
     const contextPath = window.contextJsParameters?.contextPath || '';
     const actionBase = `${contextPath}/cms/editframe/default/${langLocale}${path}`;
@@ -82,6 +99,17 @@ export const AutoTagsDialog = ({
                 setMaxTags(max);
                 setDefaultTags(preset);
                 setTagCount(String(Math.min(max, preset)));
+                if (config.tagError) {
+                    setTargetUnavailable(true);
+                    setErrorMessage(t('automatic-content-tags:label.dialog.targetError'));
+                } else if (config.tagField && config.tagProperty) {
+                    setTagTarget({
+                        property: config.tagProperty,
+                        mixin: config.tagMixin || null,
+                        field: config.tagField,
+                        multiple: config.tagMultiple !== false
+                    });
+                }
             } catch (error) {
                 console.error('Unable to load Auto Tagging configuration, using defaults:', error);
             }
@@ -90,7 +118,7 @@ export const AutoTagsDialog = ({
         return () => {
             active = false;
         };
-    }, [actionBase, isOpen]);
+    }, [actionBase, isOpen, t]);
 
     const handleCancel = () => {
         onCloseDialog();
@@ -122,11 +150,15 @@ export const AutoTagsDialog = ({
 
             const results = await response.json();
             if (Array.isArray(results.tags) && results.tags.length > 0) {
+                const field = resolveField(formik.values, tagTarget);
                 const nextTags = replaceExisting ?
                     results.tags :
-                    mergeTags(formik.values?.[TAG_LIST_FIELD], results.tags);
-                await formik.setFieldValue('jmix:tagged', true);
-                await formik.setFieldValue(TAG_LIST_FIELD, nextTags);
+                    mergeTags(splitTags(formik.values?.[field]), results.tags);
+                if (tagTarget.mixin) {
+                    await formik.setFieldValue(tagTarget.mixin, true);
+                }
+
+                await formik.setFieldValue(field, tagTarget.multiple ? nextTags : nextTags.join(', '));
                 onCloseDialog();
             } else {
                 setErrorMessage(t('automatic-content-tags:label.dialog.noTags'));
@@ -139,7 +171,7 @@ export const AutoTagsDialog = ({
         }
     };
 
-    const isApplyDisabled = defaultOption.value === currentOption.value || loadingQuery;
+    const isApplyDisabled = defaultOption.value === currentOption.value || loadingQuery || targetUnavailable;
     const hintText = replaceExisting ?
         t('automatic-content-tags:label.dialog.bottomTextReplace') :
         t('automatic-content-tags:label.dialog.bottomTextAppend');

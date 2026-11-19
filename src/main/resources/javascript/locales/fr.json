@@ -14,7 +14,8 @@
             "replaceLabel": "Remplacer les tags existants",
             "generating": "Génération des tags…",
             "noTags": "Aucun tag n'a pu être généré pour ce contenu. Seul le contenu enregistré est analysé.",
-            "error": "La génération des tags a échoué. Consultez le journal du serveur."
+            "error": "La génération des tags a échoué. Consultez le journal du serveur.",
+            "targetError": "La propriété de tags configurée pour ce module ne peut pas recevoir de tags sur ce contenu. Demandez à un administrateur de vérifier llm.tag.property et llm.tag.mixin."
         }
     }
 }

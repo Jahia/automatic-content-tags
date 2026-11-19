@@ -1,16 +1,19 @@
 package org.jahia.se.modules.contenttags.service.internal;
 
+import org.jahia.modules.genai.api.CompletionRequest;
+import org.jahia.modules.genai.api.CompletionResult;
+import org.jahia.modules.genai.api.GenAiService;
+import org.jahia.modules.genai.api.ImageInput;
+import org.jahia.modules.genai.api.ModelTier;
 import org.jahia.se.modules.contenttags.service.ContentTagsService;
-import org.jahia.se.modules.contenttags.service.spi.LlmProvider;
-import org.jahia.se.modules.contenttags.service.spi.LlmSettings;
+import org.jahia.se.modules.contenttags.service.TagTarget;
 import org.jahia.services.content.JCRNodeWrapper;
 import org.jahia.services.content.nodetypes.ExtendedPropertyDefinition;
 import org.jsoup.Jsoup;
-import org.osgi.service.cm.ManagedService;
+import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Modified;
 import org.osgi.service.component.annotations.Reference;
-import org.osgi.service.component.annotations.ReferenceCardinality;
-import org.osgi.service.component.annotations.ReferencePolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,26 +21,26 @@ import javax.jcr.Property;
 import javax.jcr.PropertyIterator;
 import javax.jcr.PropertyType;
 import javax.jcr.RepositoryException;
+import java.io.IOException;
 import java.util.Collections;
-import java.util.Dictionary;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
 
 /**
  * Default {@link ContentTagsService} implementation.
  *
  * <p>Extracts the internationalized single-valued string properties of a node (read through
- * the calling user's session — no privilege escalation), strips HTML, and asks the configured
- * {@link LlmProvider} for tags.</p>
+ * the calling user's session — no privilege escalation), strips HTML, and asks ai-assistant for
+ * tags on the model tier of {@code llm.tier}. An image ({@code jmix:image}) also sends its picture,
+ * on the tier {@code vision}, so its tags describe what it shows. The operator chooses the provider,
+ * the model and the key of each tier in the ai-assistant configuration, never here.</p>
  *
- * <p>Configuration is bound to PID {@code org.jahia.se.modules.contenttags} via
- * {@link ManagedService}; the parsed snapshot is held in an immutable {@link Config} record
- * swapped atomically, so concurrent calls are safe.</p>
+ * <p>Configuration is bound to PID {@code org.jahia.se.modules.contenttags}; the parsed snapshot is
+ * held in an immutable {@link Config} record swapped atomically, so concurrent calls are safe.</p>
  */
-@Component(service = {ContentTagsService.class, ManagedService.class},
-        property = "service.pid=org.jahia.se.modules.contenttags", immediate = true)
-public class ContentTagsServiceImpl implements ContentTagsService, ManagedService {
+@Component(service = ContentTagsService.class, configurationPid = ConfigValues.PID, immediate = true)
+public class ContentTagsServiceImpl implements ContentTagsService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ContentTagsServiceImpl.class);
 
@@ -52,60 +55,90 @@ public class ContentTagsServiceImpl implements ContentTagsService, ManagedServic
     private static final int MIN_TAG_COUNT = 1;
     // Hard safety ceiling for the configurable maximum, to protect the token budget.
     private static final int ABSOLUTE_MAX_TAG_COUNT = 50;
+    static final String DEFAULT_TAG_PROPERTY = "j:tagList";
+    static final String DEFAULT_TAG_MIXIN = "jmix:tagged";
 
-    private final Map<String, LlmProvider> providers = new ConcurrentHashMap<>();
-    private volatile Config config = Config.empty();
+    // Package-private for the unit tests, which inject a mock.
+    @Reference
+    GenAiService genAi;
 
-    @Reference(service = LlmProvider.class, cardinality = ReferenceCardinality.MULTIPLE,
-            policy = ReferencePolicy.DYNAMIC, unbind = "removeProvider")
-    public void addProvider(LlmProvider provider) {
-        providers.put(provider.getName(), provider);
+    private volatile Config config = Config.from(ConfigValues.of(Map.of()));
+
+    @Activate
+    @Modified
+    void configure(Map<String, Object> properties) {
+        config = Config.from(ConfigValues.of(properties));
+        List<String> legacy = legacyKeys(properties);
+        if (!legacy.isEmpty()) {
+            LOGGER.warn("Automatic Content Tags ignores the 1.x provider keys {}: configure the provider, the model "
+                    + "and the API key in ai-assistant (org.jahia.modules.genai.cfg), then remove these keys", legacy);
+        }
+        LOGGER.info("Automatic Content Tags configured: tags in {}, on the ai-assistant tier '{}' ({}), and on "
+                        + "'{}' for an image ({})", config.tagTarget(), config.tier().id(),
+                genAi.isAvailable(config.tier()) ? "available" : "not configured yet", ModelTier.VISION.id(),
+                genAi.isAvailable(ModelTier.VISION) ? "available" : "not configured yet");
     }
 
-    public void removeProvider(LlmProvider provider) {
-        providers.remove(provider.getName(), provider);
+    /** The keys of the 1.x built-in providers, which no longer have any effect; never their values. */
+    static List<String> legacyKeys(Map<String, ?> properties) {
+        if (properties == null) {
+            return List.of();
+        }
+        return properties.keySet().stream()
+                .filter(key -> key.equals("llm.provider") || key.startsWith("anthropic.") || key.startsWith("openai.")
+                        || key.startsWith("deepseek."))
+                .sorted()
+                .toList();
     }
 
     @Override
     public List<String> generateTags(JCRNodeWrapper node, String tagLanguage, int numberOfTags) {
         Config cfg = config;
-        LlmProvider provider = providers.get(cfg.providerName());
-        if (provider == null) {
-            throw new IllegalStateException("No LLM provider registered under name '" + cfg.providerName()
-                    + "'. Available providers: " + providers.keySet());
-        }
-        LlmSettings settings = cfg.settings().get(cfg.providerName());
-        if (settings == null || !settings.hasApiKey()) {
-            throw new IllegalStateException("LLM provider '" + cfg.providerName() + "' has no API key configured. Set "
-                    + cfg.providerName() + ".api.key in org.jahia.se.modules.contenttags.cfg");
-        }
-
         int count = clampCount(numberOfTags, cfg.tagCountDefault(), cfg.tagCountMax());
 
         String text = extractText(node, cfg.maxSourceChars());
-        if (text.isEmpty()) {
-            LOGGER.debug("No internationalized text found on node {}", node.getPath());
+        Optional<ImageInput> picture = picture(node, cfg);
+        if (text.isEmpty() && picture.isEmpty()) {
+            LOGGER.debug("No internationalized text and no image found on node {}", node.getPath());
             return Collections.emptyList();
         }
 
         // The count and language are authoritative here, so the configurable prompt only has to
         // carry style guidance (and must not hardcode a number).
-        String prompt = "Generate exactly " + count + " relevant tags, in " + tagLanguage
-                + ", for the following content. " + cfg.prompt() + " Content: " + text;
-        LOGGER.debug("Requesting {} tags from provider '{}' (model {}) for node {}",
-                count, provider.getName(), settings.model(), node.getPath());
-        try {
-            String rawResponse = provider.complete(prompt, settings);
-            List<String> tags = TagResponseParser.parse(rawResponse, count);
-            LOGGER.debug("Provider '{}' returned {} tags for node {}", provider.getName(), tags.size(), node.getPath());
-            return tags;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while calling LLM provider '" + provider.getName() + "'", e);
-        } catch (Exception e) {
-            throw new IllegalStateException("Call to LLM provider '" + provider.getName() + "' failed for node "
-                    + node.getPath(), e);
+        String ask = "Generate exactly " + count + " relevant tags, in " + tagLanguage;
+        CompletionRequest.Builder request = CompletionRequest.builder()
+                .maxOutputTokens(cfg.maxTokens())
+                .temperature(cfg.temperature());
+        if (picture.isPresent()) {
+            String prompt = ask + ", for this image. " + cfg.prompt() + " Its file name is \"" + node.getName() + "\"."
+                    + (text.isEmpty() ? "" : " Its text: " + text);
+            request.tier(ModelTier.VISION).input(prompt).images(List.of(picture.get()));
+        } else {
+            request.tier(cfg.tier()).input(ask + ", for the following content. " + cfg.prompt() + " Content: " + text);
         }
+        CompletionRequest built = request.build();
+        LOGGER.debug("Requesting {} tags on tier '{}' for node {}", count, built.tier().id(), node.getPath());
+        CompletionResult result = genAi.complete(built);
+        List<String> tags = TagResponseParser.parse(result.text(), count);
+        LOGGER.debug("Model {} returned {} tags for node {}", result.model(), tags.size(), node.getPath());
+        return tags;
+    }
+
+    @Override
+    public Optional<TagTarget> tagTarget(JCRNodeWrapper node) throws RepositoryException {
+        TargetProperty target = config.tagTarget();
+        ExtendedPropertyDefinition definition = definitionOf(node, target);
+        if (definition == null || !TargetProperty.holdsText(definition)) {
+            LOGGER.debug("The tag property {} cannot hold tags on {}", target, node.getPath());
+            return Optional.empty();
+        }
+        String field = definition.getDeclaringNodeType().getName() + "_" + target.property();
+        return Optional.of(new TagTarget(target.property(), target.mixin(), field, definition.isMultiple()));
+    }
+
+    /** Package-private so the unit tests can stand in for the node type registry. */
+    ExtendedPropertyDefinition definitionOf(JCRNodeWrapper node, TargetProperty target) throws RepositoryException {
+        return target.definitionOn(node);
     }
 
     @Override
@@ -116,6 +149,27 @@ public class ContentTagsServiceImpl implements ContentTagsService, ManagedServic
     @Override
     public int getMaxTagCount() {
         return config.tagCountMax();
+    }
+
+    /**
+     * @return the picture of an image node, read through the caller's session; empty for another node, and
+     *         for an image with no rendition the model accepts, whose tags then come from its text only
+     */
+    private static Optional<ImageInput> picture(JCRNodeWrapper node, Config cfg) {
+        try {
+            if (!node.isNodeType("jmix:image")) {
+                return Optional.empty();
+            }
+            Optional<ImageInput> picture = ImagePayload.select(node, cfg.maxImageBytes());
+            if (picture.isEmpty()) {
+                LOGGER.debug("The image {} has no rendition the model accepts, so its tags come from its text",
+                        node.getPath());
+            }
+            return picture;
+        } catch (RepositoryException | IOException e) {
+            LOGGER.warn("Unable to read the image {}, so its tags come from its text", node.getPath(), e);
+            return Optional.empty();
+        }
     }
 
     private static int clampCount(int requested, int configuredDefault, int configuredMax) {
@@ -152,96 +206,27 @@ public class ContentTagsServiceImpl implements ContentTagsService, ManagedServic
         return text;
     }
 
-    @Override
-    public void updated(Dictionary<String, ?> properties) {
-        if (properties == null) {
-            config = Config.empty();
-            LOGGER.warn("Automatic Content Tags configuration removed; tag generation is disabled "
-                    + "until org.jahia.se.modules.contenttags.cfg is provided");
-            return;
-        }
-        String providerName = string(properties, "llm.provider", "anthropic").toLowerCase();
-        String prompt = string(properties, "llm.user.prompt", DEFAULT_PROMPT);
-        int maxTokens = integer(properties, "llm.max.tokens", DEFAULT_MAX_TOKENS);
-        int maxSourceChars = integer(properties, "llm.max.source.chars", DEFAULT_MAX_SOURCE_CHARS);
-        // Configurable ceiling, bounded by the absolute safety max; the default count can never exceed it.
-        int tagCountMax = Math.max(MIN_TAG_COUNT, Math.min(ABSOLUTE_MAX_TAG_COUNT,
-                integer(properties, "llm.tag.count.max", DEFAULT_TAG_COUNT_MAX)));
-        int tagCountDefault = Math.max(MIN_TAG_COUNT, Math.min(tagCountMax,
-                integer(properties, "llm.tag.count.default", DEFAULT_TAG_COUNT)));
-        Double temperature = decimal(properties, "llm.temperature");
-
-        Map<String, LlmSettings> settings = Map.of(
-                "anthropic", providerSettings(properties, "anthropic", "https://api.anthropic.com",
-                        "claude-sonnet-4-6", maxTokens, temperature),
-                "openai", providerSettings(properties, "openai", "https://api.openai.com",
-                        "gpt-5-mini", maxTokens, temperature),
-                "deepseek", providerSettings(properties, "deepseek", "https://api.deepseek.com",
-                        "deepseek-chat", maxTokens, temperature));
-
-        config = new Config(providerName, prompt, maxSourceChars, tagCountDefault, tagCountMax, settings);
-
-        LlmSettings active = settings.get(providerName);
-        if (active == null) {
-            LOGGER.error("Unknown llm.provider '{}'. Supported values: {}", providerName, settings.keySet());
-        } else if (!active.hasApiKey()) {
-            LOGGER.error("LLM provider '{}' selected but {}.api.key is not configured", providerName, providerName);
-        } else {
-            LOGGER.info("Automatic Content Tags configured: provider={} model={} baseUrl={}",
-                    providerName, active.model(), active.baseUrl());
-        }
-    }
-
-    private static LlmSettings providerSettings(Dictionary<String, ?> properties, String prefix,
-            String defaultBaseUrl, String defaultModel, int maxTokens, Double temperature) {
-        String baseUrl = string(properties, prefix + ".base.url", defaultBaseUrl);
-        if (baseUrl.endsWith("/")) {
-            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
-        }
-        return new LlmSettings(
-                string(properties, prefix + ".api.key", ""),
-                baseUrl,
-                string(properties, prefix + ".model", defaultModel),
-                maxTokens,
-                temperature);
-    }
-
-    private static String string(Dictionary<String, ?> properties, String key, String defaultValue) {
-        Object value = properties.get(key);
-        String s = value == null ? null : value.toString().trim();
-        return s == null || s.isEmpty() ? defaultValue : s;
-    }
-
-    private static int integer(Dictionary<String, ?> properties, String key, int defaultValue) {
-        try {
-            return Integer.parseInt(string(properties, key, String.valueOf(defaultValue)));
-        } catch (NumberFormatException e) {
-            LOGGER.warn("Invalid integer for configuration key {}; using default {}", key, defaultValue);
-            return defaultValue;
-        }
-    }
-
-    private static Double decimal(Dictionary<String, ?> properties, String key) {
-        String value = string(properties, key, "");
-        if (value.isEmpty()) {
-            return null;
-        }
-        try {
-            return Double.parseDouble(value);
-        } catch (NumberFormatException e) {
-            LOGGER.warn("Invalid decimal for configuration key {}; ignoring it", key);
-            return null;
-        }
-    }
-
     /**
      * Immutable configuration snapshot.
      */
-    private record Config(String providerName, String prompt, int maxSourceChars, int tagCountDefault,
-                          int tagCountMax, Map<String, LlmSettings> settings) {
-        static Config empty() {
-            return new Config("anthropic", DEFAULT_PROMPT, DEFAULT_MAX_SOURCE_CHARS,
-                    DEFAULT_TAG_COUNT, DEFAULT_TAG_COUNT_MAX, Map.of());
+    record Config(TargetProperty tagTarget, ModelTier tier, String prompt, int maxTokens, Double temperature,
+                  int maxSourceChars, int maxImageBytes, int tagCountDefault, int tagCountMax) {
+
+        static Config from(ConfigValues values) {
+            // Configurable ceiling, bounded by the absolute safety max; the default count can never exceed it.
+            int tagCountMax = values.integer("llm.tag.count.max", DEFAULT_TAG_COUNT_MAX,
+                    MIN_TAG_COUNT, ABSOLUTE_MAX_TAG_COUNT);
+            return new Config(
+                    new TargetProperty(values.string("llm.tag.property", DEFAULT_TAG_PROPERTY),
+                            values.optional("llm.tag.mixin", DEFAULT_TAG_MIXIN)),
+                    values.tier("llm.tier", ModelTier.LITE),
+                    values.string("llm.user.prompt", DEFAULT_PROMPT),
+                    values.integer("llm.max.tokens", DEFAULT_MAX_TOKENS, 1, Integer.MAX_VALUE),
+                    values.decimal("llm.temperature"),
+                    values.integer("llm.max.source.chars", DEFAULT_MAX_SOURCE_CHARS, 1, Integer.MAX_VALUE),
+                    ImagePayload.maxBytes(values),
+                    values.integer("llm.tag.count.default", DEFAULT_TAG_COUNT, MIN_TAG_COUNT, tagCountMax),
+                    tagCountMax);
         }
     }
 }
