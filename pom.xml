@@ -36,14 +36,22 @@
     <name>Automatic Content Tags</name>
     <version>2.0.0-SNAPSHOT</version>
     <packaging>bundle</packaging>
-    <description>Generates content tags and image alternative text through genai-connector: a Content Editor action for tags, and a GraphQL mutation that fills jahia_ai_alt on images.</description>
+    <description>Generates content tags and image alternative text through the AI models of ai-assistant: a Content Editor action for tags, and a GraphQL mutation that fills jahia_ai_alt on images.</description>
     <dependencies>
-        <!-- The LLM access of the module. No release exists yet: mvn install genai-connector first. -->
+        <!-- The LLM access of the module: ai-assistant exports org.jahia.modules.genai.api 0.1.0.
+             No Maven repository holds it yet: mvn install ai-assistant first. The module reads
+             only that package, so none of the dependencies of ai-assistant comes along. -->
         <dependency>
             <groupId>org.jahia.modules</groupId>
-            <artifactId>genai-connector</artifactId>
-            <version>1.0.0-SNAPSHOT</version>
+            <artifactId>ai-assistant</artifactId>
+            <version>0.1.0-SNAPSHOT</version>
             <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.jahia.modules</groupId>
@@ -89,7 +97,7 @@
         <tag>HEAD</tag>
     </scm>
     <properties>
-        <jahia-depends>default,genai-connector,graphql-dxm-provider</jahia-depends>
+        <jahia-depends>default,ai-assistant,graphql-dxm-provider</jahia-depends>
         <yarn.arguments>build:production</yarn.arguments>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
@@ -146,7 +154,7 @@
                 <extensions>true</extensions>
                 <configuration>
                     <instructions>
-                        <Jahia-Depends>default,genai-connector,graphql-dxm-provider</Jahia-Depends>
+                        <Jahia-Depends>default,ai-assistant,graphql-dxm-provider</Jahia-Depends>
                         <Jahia-Static-Resources>/css,/fonts,/javascript,/icons,/img</Jahia-Static-Resources>
                         <_dsannotations>*</_dsannotations>
                     </instructions>

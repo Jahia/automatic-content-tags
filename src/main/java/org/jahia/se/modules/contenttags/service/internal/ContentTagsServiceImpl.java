@@ -31,10 +31,10 @@ import java.util.Optional;
  * Default {@link ContentTagsService} implementation.
  *
  * <p>Extracts the internationalized single-valued string properties of a node (read through
- * the calling user's session — no privilege escalation), strips HTML, and asks genai-connector for
+ * the calling user's session — no privilege escalation), strips HTML, and asks ai-assistant for
  * tags on the model tier of {@code llm.tier}. An image ({@code jmix:image}) also sends its picture,
  * on the tier {@code vision}, so its tags describe what it shows. The operator chooses the provider,
- * the model and the key of each tier in the genai-connector configuration, never here.</p>
+ * the model and the key of each tier in the ai-assistant configuration, never here.</p>
  *
  * <p>Configuration is bound to PID {@code org.jahia.se.modules.contenttags}; the parsed snapshot is
  * held in an immutable {@link Config} record swapped atomically, so concurrent calls are safe.</p>
@@ -71,9 +71,9 @@ public class ContentTagsServiceImpl implements ContentTagsService {
         List<String> legacy = legacyKeys(properties);
         if (!legacy.isEmpty()) {
             LOGGER.warn("Automatic Content Tags ignores the 1.x provider keys {}: configure the provider, the model "
-                    + "and the API key in genai-connector (org.jahia.modules.genai.cfg), then remove these keys", legacy);
+                    + "and the API key in ai-assistant (org.jahia.modules.genai.cfg), then remove these keys", legacy);
         }
-        LOGGER.info("Automatic Content Tags configured: tags in {}, on the genai-connector tier '{}' ({}), and on "
+        LOGGER.info("Automatic Content Tags configured: tags in {}, on the ai-assistant tier '{}' ({}), and on "
                         + "'{}' for an image ({})", config.tagTarget(), config.tier().id(),
                 genAi.isAvailable(config.tier()) ? "available" : "not configured yet", ModelTier.VISION.id(),
                 genAi.isAvailable(ModelTier.VISION) ? "available" : "not configured yet");

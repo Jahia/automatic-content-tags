@@ -7,7 +7,7 @@ import java.util.List;
  *
  * @param images     one result per image visited, in path order
  * @param resumeFrom the path of the first image left when the invocation stopped early: at its image limit, at
- *                   its time limit, at the rate limit of genai-connector, or on a busy provider. {@code null}
+ *                   its time limit, at the rate limit of ai-assistant, or on a busy provider. {@code null}
  *                   when every image was visited. Pass it back to continue from that image
  */
 public record AltTextReport(List<AltTextResult> images, String resumeFrom) {

@@ -7,19 +7,21 @@ This module uses AI to write two kinds of metadata in Jahia:
 - **Alternative text of images**: a GraphQL mutation writes the `jahia_ai_alt` property of an image, or
   of every image below a folder, with a vision model that looks at the picture.
 
-The module reaches its models through [genai-connector](https://github.com/Jahia/genai-connector).
-It holds no provider, model or API key of its own: the operator configures them once, in
-genai-connector, for the whole platform.
+The module reaches its models through [ai-assistant](https://github.com/Jahia/ai-assistant), which
+holds the former genai-connector. This module holds no provider, model or API key of its own: the
+operator configures them once, in ai-assistant, for the whole platform.
 
-Compatible with Jahia 8.2 (genai-connector requires 8.2.2). Requires Java 17 to build.
+Runs on Jahia 8.2.3.2 or later, which ai-assistant requires. Requires Java 17 to build.
 
 ## Requirements
 
-- [genai-connector](https://github.com/Jahia/genai-connector) installed and started, with the tier
-  `vision` (genai-connector ADR 0010). Each call that sends an image uses `vision`: the alternative
-  text, and the tags of an image. The tags of other content use `llm.tier` (`lite` by default).
-- The model of `vision` must accept images. With no `vision.*` key, genai-connector uses its shared
-  model for `vision`; the shipped `mistral/mistral-small-latest` accepts images.
+- [ai-assistant](https://github.com/Jahia/ai-assistant) installed and started, with the tier
+  `vision`. Each call that sends an image uses `vision`: the alternative text, and the tags of an
+  image. The tags of other content use `llm.tier` (`lite` by default). ai-assistant requires
+  mcp-server and content-governance.
+- The model of `vision` must accept images. With no `vision.*` key, ai-assistant uses its shared
+  model for `vision`; the shipped `mistral/mistral-small-latest` accepts images. The
+  `docs/genai/README.md` of ai-assistant states what each tier needs.
 - `graphql-dxm-provider`, which every Jahia 8.2 ships.
 
 ## Features
@@ -36,7 +38,7 @@ Compatible with Jahia 8.2 (genai-connector requires 8.2.2). Requires Java 17 to 
   every image below a path.
 - **Configurable targets**: the property and mixin that receive the alternative text and the tags come
   from the configuration (`alt.property`, `alt.mixin`, `llm.tag.property`, `llm.tag.mixin`).
-- **One AI configuration**: provider, model and key come from genai-connector, which also applies
+- **One AI configuration**: provider, model and key come from ai-assistant, which also applies
   the per-user rate limit, retries and the audit log.
 
 ## Architecture
@@ -55,17 +57,19 @@ src/javascript/                                # React 18 UI extension (Module F
 
 ## Installation
 
-1. Build and install genai-connector first (`mvn clean install` in its checkout), because no Maven
+1. Build and install ai-assistant first (`mvn clean install` in its checkout), because no Maven
    repository holds it yet.
 2. Build the module:
    ```bash
    mvn clean install
    ```
-3. Deploy genai-connector, then `target/automatic-content-tags-<version>.jar`, to your Jahia
-   instance (module management UI or `digital-factory-data/modules`).
-4. Configure genai-connector (`org.jahia.modules.genai.cfg`): a model for the `lite` tier, and a
-   model that reads images for the `vision` tier. For example, `vision.model=mistral/mistral-medium-latest`
-   sends the image calls to a larger gateway model. See the genai-connector README.
+3. Deploy ai-assistant, then `target/automatic-content-tags-<version>.jar`, to your Jahia
+   instance (module management UI or `digital-factory-data/modules`). Uninstall genai-connector
+   first, because ai-assistant exports the same packages.
+4. Configure the model access of ai-assistant (`org.jahia.modules.genai.cfg`): a model for the
+   `lite` tier, and a model that reads images for the `vision` tier. For example,
+   `vision.model=mistral/mistral-medium-latest` sends the image calls to a larger gateway model.
+   See the `docs/genai/README.md` of ai-assistant.
 
 ## Configuration
 
@@ -74,7 +78,7 @@ the defaults are shown.
 
 ```properties
 # --- Tags ---
-llm.tier=lite                 # genai-connector tier of the tags of a content: lite | balanced | advanced
+llm.tier=lite                 # ai-assistant tier of the tags of a content: lite | balanced | advanced
                               # (an image is tagged from its picture, on the tier vision)
 llm.tag.property=j:tagList    # property that receives the tags
 llm.tag.mixin=jmix:tagged     # mixin that declares it; empty when the content type declares it
@@ -117,10 +121,14 @@ name is refused rather than written as a stray property.
   properties.
 
 **Upgrading from 1.x**: the keys `llm.provider` and `<provider>.api.key`, `.model` and `.base.url`
-are no longer read. Configure the provider and the key in genai-connector instead, and remove them
+are no longer read. Configure the provider and the key in ai-assistant instead, and remove them
 from this file.
 
-**Choosing the model of the images.** Set it in genai-connector, with `vision.model` or a whole
+**Moving from genai-connector**: ai-assistant reads the same configuration,
+`org.jahia.modules.genai.cfg`, so each tier keeps its model. Uninstall genai-connector, install
+ai-assistant, then install this module.
+
+**Choosing the model of the images.** Set it in ai-assistant, with `vision.model` or a whole
 `vision.*` connection. This module has no tier key for images. The keys `alt.tier` and
 `alt.max.image.bytes` of earlier 2.0.0 snapshots are no longer read; `image.max.bytes` replaces the
 second.
@@ -169,7 +177,7 @@ mutation {
   Editor says that AI must fill it. A template or a script can therefore treat its value as AI-written.
 - Each image is saved on its own, and the images are visited in path order. A call stops with
   `truncated: true` and a `resumeFrom` path when it reaches `alt.max.images` model calls or
-  `alt.max.seconds`, at the rate limit of genai-connector, or when the AI provider is busy or
+  `alt.max.seconds`, at the rate limit of ai-assistant, or when the AI provider is busy or
   unavailable. Call it again with that `resumeFrom` to continue, also with `overwrite: true`.
 - `images` lists the generated and failed images. Ask `images(includeSkipped: true)` to also list
   the skipped ones; `skipped` counts them in both cases.
@@ -199,7 +207,7 @@ mutation {
   user can read, and makes no model call for an image that user cannot edit (`jcr:write_default`).
 - The CSRF guard whitelist covers only `*.generateContentTagsAction.do` and `*.contentTagsConfig.do`;
   `/modules/graphql` keeps its own protections.
-- Content text and image bytes go to the model of the configured genai-connector tier. Content text is
+- Content text and image bytes go to the model of the configured ai-assistant tier. Content text is
   truncated to `llm.max.source.chars`; the model answer is stored as plain text, without markup.
 
 ## Development

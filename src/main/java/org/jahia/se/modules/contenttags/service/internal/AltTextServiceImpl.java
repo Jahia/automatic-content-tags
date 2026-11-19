@@ -40,7 +40,7 @@ import java.util.function.LongSupplier;
  * Default {@link AltTextService} implementation.
  *
  * <p>For each image it sends one rendition of the picture, with a short instruction, to the model of
- * the genai-connector tier {@code vision}, cleans the answer and saves it in the property of
+ * the ai-assistant tier {@code vision}, cleans the answer and saves it in the property of
  * {@code alt.property} (default {@code jahia_ai_alt}), in the locale of the caller's session. It never opens a system session: an image the caller cannot
  * read is not listed, and an image the caller cannot edit is reported as failed before any model
  * call.</p>
@@ -70,7 +70,7 @@ public class AltTextServiceImpl implements AltTextService {
     @Modified
     void configure(Map<String, Object> properties) {
         config = Config.from(ConfigValues.of(properties));
-        LOGGER.info("Automatic Content Tags configured: alternative text in {}, on the genai-connector tier '{}' ({}), "
+        LOGGER.info("Automatic Content Tags configured: alternative text in {}, on the ai-assistant tier '{}' ({}), "
                         + "at most {} images and {} seconds per call", config.target(), ModelTier.VISION.id(),
                 genAi.isAvailable(ModelTier.VISION) ? "available" : "not configured yet", config.maxImages(),
                 config.maxSeconds());
@@ -115,7 +115,7 @@ public class AltTextServiceImpl implements AltTextService {
                         "The AI rate limit is reached, try again later"));
                 return new AltTextReport(results, path);
             } catch (GenAiProviderException e) {
-                // Only a retryable failure gets here, and genai-connector already retried it: the next
+                // Only a retryable failure gets here, and ai-assistant already retried it: the next
                 // image would meet the same busy or broken provider.
                 LOGGER.warn("The model call failed for the image {}, the run stops: {}", path, e.getMessage());
                 results.add(new AltTextResult(path, AltTextResult.Status.FAILED, null,

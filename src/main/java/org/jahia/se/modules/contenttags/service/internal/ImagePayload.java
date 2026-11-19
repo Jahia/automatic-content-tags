@@ -28,7 +28,7 @@ final class ImagePayload {
     /** The configuration key of the largest rendition sent to the model, for the alternative text and the tags. */
     static final String MAX_BYTES_KEY = "image.max.bytes";
 
-    /** The media types that every chat provider of genai-connector accepts. */
+    /** The media types that every chat provider of ai-assistant accepts. */
     private static final Set<String> SENDABLE = Set.of("image/jpeg", "image/png", "image/gif", "image/webp");
 
     private ImagePayload() {

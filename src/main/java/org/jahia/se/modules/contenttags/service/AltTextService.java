@@ -6,7 +6,7 @@ import javax.jcr.RepositoryException;
 
 /**
  * Writes the alternative text of images into a configured property ({@code alt.property}, default
- * {@value #DEFAULT_ALT_PROPERTY}), with a vision model reached through genai-connector.
+ * {@value #DEFAULT_ALT_PROPERTY}), with a vision model reached through ai-assistant.
  *
  * <p>Every read and every write goes through the session of the node that the caller passes, so the
  * permissions of the calling user apply. The text is written in the locale of that session.</p>
@@ -41,7 +41,7 @@ public interface AltTextService {
      * @param resumeFrom      the {@link AltTextReport#resumeFrom()} of an earlier invocation, to start at that
      *                        image; {@code null} to start at the first image
      * @return one result per image visited
-     * @throws org.jahia.modules.genai.api.GenAiNotConfiguredException when genai-connector has no
+     * @throws org.jahia.modules.genai.api.GenAiNotConfiguredException when ai-assistant has no
      *         model for the tier {@code vision}
      * @throws RepositoryException when the images cannot be listed
      */

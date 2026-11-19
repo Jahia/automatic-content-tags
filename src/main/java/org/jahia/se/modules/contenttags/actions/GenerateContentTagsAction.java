@@ -75,7 +75,7 @@ public class GenerateContentTagsAction extends Action {
         } catch (GenAiNotConfiguredException e) {
             LOGGER.warn("Tag generation is not available: {}", e.getMessage());
             JSONObject error = new JSONObject().put("error",
-                    "Tag generation is not available: genai-connector has no model configured for it");
+                    "Tag generation is not available: ai-assistant has no model configured for it");
             return new ActionResult(HttpServletResponse.SC_SERVICE_UNAVAILABLE, null, error);
         } catch (GenAiQuotaExceededException e) {
             JSONObject error = new JSONObject().put("error", "Too many AI requests, try again later");
