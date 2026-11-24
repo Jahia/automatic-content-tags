@@ -4,6 +4,66 @@ All notable changes to this module are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-11-24
+
+### Added
+- Alternative text of images. The mixin `jmix:jahiaAlt` extends `jmix:image` with the i18n
+  property `jahia_ai_alt`, and the GraphQL mutation `generateImageAltText(path, language,
+  includeSubNodes, overwrite, resumeFrom)` fills it with a vision model, for one image or for every
+  image below a path. It runs under the caller's session, saves each image on its own, skips an
+  image that already has a text unless `overwrite` is set, and reports one result per image.
+- A call of the mutation stops with `truncated: true` and a `resumeFrom` path at `alt.max.images`
+  model calls, after `alt.max.seconds`, at the rate limit of ai-assistant, or when the AI provider is
+  busy or unavailable. The next call passes that `resumeFrom` to continue. `images` lists the
+  generated and failed images; `images(includeSkipped: true)` also lists the skipped ones.
+- A rule adds `jmix:jahiaAlt` to each uploaded image, like Jahia adds `jmix:image`, so the Content
+  Editor shows the alternative text field on every new image.
+- Alternative text at upload: with `alt.generate.on.upload=true` (the default), the text of each new
+  image is generated a few seconds after the upload, in every site language, as the uploader. An
+  existing text is never replaced.
+- Configuration keys `alt.max.length`, `alt.max.images`, `alt.max.seconds`, `alt.max.tokens`, `alt.temperature` and `alt.prompt`. `llm.temperature` now applies to the tags only.
+- The alternative text and the tags of an image use the ai-assistant tier `vision`, whose model
+  reads images. The operator chooses that model in ai-assistant, so this module has no tier key
+  for images.
+- Tags of an image: the Auto Tagging action now shows on images (`jmix:image`), and the model sees
+  the picture with the file name and the text of the image. An image with no rendition the model
+  accepts is tagged from its text, on `llm.tier`.
+- Configuration key `image.max.bytes`, the largest image sent to the model, for the alternative text
+  and the tags (default 5 MB).
+- Configurable target properties: `alt.property` and `alt.mixin` (default `jahia_ai_alt` on
+  `jmix:jahiaAlt`) for the alternative text, `llm.tag.property` and `llm.tag.mixin` (default
+  `j:tagList` on `jmix:tagged`) for the tags. Each pair is checked on the node against that exact
+  property name; a single-valued tag property receives the tags joined with ", ".
+- Configuration key `llm.tier`, the ai-assistant tier of the tags of a content from its text
+  (default `lite`).
+- Each model call names the site of its content, so ai-assistant checks the permission
+  `genaiAccess` of the calling user on that site. A user without it gets HTTP 403 from the tagging
+  action and a `FAILED` image from the mutation, without a model call. A content outside `/sites`
+  resolves to the system site.
+- Unit tests (JUnit 5, Mockito).
+
+### Changed
+- **Breaking**: the module calls its models through ai-assistant, which is now a required
+  dependency. ai-assistant holds the former genai-connector, needs Jahia 8.2.3.2 and requires
+  mcp-server. The provider, the model and the API key are configured in ai-assistant. The keys
+  `llm.provider` and `anthropic.*`, `openai.*`, `deepseek.*` are no longer read.
+- The tagging action answers HTTP 503 when ai-assistant has no model for the tier or when the AI
+  provider is unavailable, and HTTP 429 at the rate limit of the user or of the provider.
+
+### Known limits
+- The upload rule acts on every site of the instance, also where the module is not enabled: each
+  uploaded image gets `jmix:jahiaAlt`, and with `alt.generate.on.upload=true` (the default) its
+  picture is sent to the model once per site language, on the uploader's rate limit in ai-assistant.
+  Set `alt.generate.on.upload=false` to generate a text only through the mutation.
+- The module is built against ai-assistant `0.1.0-SNAPSHOT`, which has no release yet. No Maven
+  repository and no Store entry holds ai-assistant: build it from its repository.
+- Before an uninstall, remove `jmix:jahiaAlt` from the images that carry it. The README lists these
+  limits with their details.
+
+### Removed
+- **Breaking**: the built-in Anthropic, OpenAI and DeepSeek providers and the exported
+  `org.jahia.se.modules.contenttags.service.spi` package (`LlmProvider`, `LlmSettings`).
+
 ## [1.0.1] - 2026-10-07
 
 ### Added

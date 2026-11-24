@@ -1,0 +1,12 @@
+<jmix = 'http://www.jahia.org/jahia/mix/1.0'>
+
+// The alternative text of an image. The rule "Set alternative text mixin on image update" of
+// META-INF/rules.drl adds this mixin to every uploaded image, so the Content Editor shows the field:
+// the editor ignores "extends = jmix:image", because an image's primary type is jnt:file. The
+// generateImageAltText GraphQL mutation also adds the mixin before it writes.
+// Never put a hyphen in a property name here: Jahia stores this file re-serialized without quotes in
+// its definitions table, and a node that loads it from there reads the hyphen as a new property.
+[jmix:jahiaAlt] mixin
+ extends = jmix:image
+ itemtype = content
+ - jahia_ai_alt (string, textarea) i18n

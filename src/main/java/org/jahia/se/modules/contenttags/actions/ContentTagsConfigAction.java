@@ -3,6 +3,7 @@ package org.jahia.se.modules.contenttags.actions;
 import org.jahia.bin.Action;
 import org.jahia.bin.ActionResult;
 import org.jahia.se.modules.contenttags.service.ContentTagsService;
+import org.jahia.se.modules.contenttags.service.TagTarget;
 import org.jahia.services.content.JCRSessionWrapper;
 import org.jahia.services.render.RenderContext;
 import org.jahia.services.render.Resource;
@@ -16,10 +17,12 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
- * Read-only action exposing the tag-count configuration to the Content Editor dialog so the
- * "number of tags" input can reflect the administrator-configured maximum and default.
+ * Read-only action exposing the tag configuration to the Content Editor dialog: the configured maximum and
+ * default number of tags, and the form field that receives them ({@code llm.tag.property} and
+ * {@code llm.tag.mixin}, resolved on the current node).
  *
  * <p>Endpoint: {@code POST /cms/editframe/default/{lang}{path}.contentTagsConfig.do} (POST because
  * Jahia gates GET render actions; it is CSRF-whitelisted alongside the generation action). Requires
@@ -51,6 +54,15 @@ public class ContentTagsConfigAction extends Action {
         JSONObject result = new JSONObject()
                 .put("defaultTags", contentTagsService.getDefaultTagCount())
                 .put("maxTags", contentTagsService.getMaxTagCount());
+        Optional<TagTarget> target = contentTagsService.tagTarget(resource.getNode());
+        if (target.isPresent()) {
+            result.put("tagProperty", target.get().property())
+                    .put("tagMixin", target.get().mixin() == null ? JSONObject.NULL : target.get().mixin())
+                    .put("tagField", target.get().field())
+                    .put("tagMultiple", target.get().multiple());
+        } else {
+            result.put("tagError", "The configured tag property cannot hold tags on this content");
+        }
         return new ActionResult(HttpServletResponse.SC_OK, null, result);
     }
 }
