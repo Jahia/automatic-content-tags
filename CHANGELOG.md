@@ -4,6 +4,23 @@ All notable changes to this module are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-11-24
+
+### Fixed
+- The alternative text at upload is generated only for an image of a site where the module is
+  enabled. An image outside `/sites`, such as a file of a user, got a text in every language of the
+  system site; an image of a site without the module got one too.
+- A picture that replaces an earlier one gets a new text in every site language. The text of the
+  earlier picture stayed.
+- The module no longer lets an upload fail when it stops while images are queued, and its log names
+  how many queued images got no text.
+
+### Added
+- Configuration keys `alt.upload.max.queue` (default 200), `alt.upload.max.calls` (default 30) and
+  `alt.upload.window.seconds` (default 600): the uploaded images that wait for their text, and the
+  model calls that the uploads of one user may make per window. A stop at the rate limit or on a busy
+  provider pauses the generation at upload for that user for a minute.
+
 ## [2.0.0] - 2026-11-24
 
 ### Added

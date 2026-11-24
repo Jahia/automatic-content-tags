@@ -4,7 +4,7 @@ Source copy for the store.jahia.com listing. Keep in sync with the module versio
 
 - **Module name:** Automatic Content Tags
 - **Module id:** automatic-content-tags
-- **Version:** 2.0.0
+- **Version:** 2.0.1
 - **Compatibility:** Jahia 8.2
 - **License:** MIT
 - **Author:** Jahia Solutions Group
@@ -62,8 +62,8 @@ It is built to Jahia's security and integration standards: the action is POST-on
    #llm.tag.count.default=5
    # Style guidance only — the tag count and language come from the dialog.
    #llm.user.prompt=Respond ONLY with a JSON array of concise single- or two-word strings, without markdown, explanations or duplicates.
-   # Alternative text of each uploaded image, in every site language (default shown).
-   # It acts on every site of the instance: set it to false to generate a text only through the mutation.
+   # Alternative text of each uploaded image, in every site language, on the sites where the module is
+   # enabled (default shown). Set it to false to generate a text only through the mutation.
    #alt.generate.on.upload=true
    ```
 
@@ -78,7 +78,7 @@ It is built to Jahia's security and integration standards: the action is POST-on
 1. **Installez le module.** Dans Administration → Modules, chargez le JAR du module, puis démarrez-le. Le module ai-assistant doit être installé et démarré avant lui.
 2. **Activez-le sur votre site.** Dans Administration → Modules, ajoutez *Automatic Content Tags* aux sites où l'action doit être disponible. L'action Auto Tagging n'apparaît que sur les sites où le module est activé.
 3. **Configurez l'IA dans ai-assistant.** Renseignez le fournisseur, le modèle et la clé des niveaux `lite` et `vision` dans `org.jahia.modules.genai.cfg`. Le modèle de `vision` doit accepter les images. Les réglages de ce module sont dans `org.jahia.se.modules.contenttags.cfg`, dans `digital-factory-data/karaf/etc/`. La configuration est prise en compte sans redémarrage.
-4. **Choisissez si le texte alternatif est généré au téléversement.** Par défaut (`alt.generate.on.upload=true`), chaque image téléversée est envoyée au modèle, dans chaque langue de son site, sur tous les sites de l'instance. Mettez la clé à `false` pour ne générer un texte que par la mutation GraphQL `generateImageAltText`.
+4. **Choisissez si le texte alternatif est généré au téléversement.** Par défaut (`alt.generate.on.upload=true`), chaque image téléversée sur un site où le module est activé est envoyée au modèle, dans chaque langue du site. Mettez la clé à `false` pour ne générer un texte que par la mutation GraphQL `generateImageAltText`.
 5. **Utilisez-le.** Ouvrez un contenu ou une image dans l'éditeur de contenu, ouvrez le menu à trois points, cliquez sur **Auto Tagging**, choisissez la langue et le nombre de tags, puis cliquez sur **Appliquer**. Enregistrez le contenu pour conserver les tags.
 6. **Vérifiez.** Téléversez une image : quelques secondes plus tard, son champ « Texte alternatif IA » contient un texte dans chaque langue du site. Relisez-le avant de publier.
 
@@ -91,13 +91,13 @@ Every provider of ai-assistant: the Jahia AI gateway, Anthropic, OpenAI, Mistral
 The GraphQL mutation `generateImageAltText` sends the image (or its Jahia thumbnail when the original is too large or in another format) to the model of the ai-assistant tier `vision`, and saves the answer in the i18n property `jahia_ai_alt` of the image, in the edit workspace. It skips an image that already has a text unless `overwrite` is true. The same happens a few seconds after each upload, unless `alt.generate.on.upload` is `false`.
 
 **Can I turn off the alternative text at upload?**
-Yes: set `alt.generate.on.upload=false` in `org.jahia.se.modules.contenttags.cfg`. Each uploaded image still gets the "AI alternative text" field, empty, and the mutation fills it on demand. One image on a site with ten languages makes ten model calls, counted on the uploader's rate limit in ai-assistant.
+Yes: set `alt.generate.on.upload=false` in `org.jahia.se.modules.contenttags.cfg`. Each uploaded image still gets the "AI alternative text" field, empty, and the mutation fills it on demand. One image on a site with ten languages makes ten model calls, counted on the uploader's rate limit in ai-assistant; `alt.upload.max.calls` caps what the uploads of one user take (30 calls per 10 minutes by default).
 
 **Do I need an API key, and does it cost anything?**
 ai-assistant needs one for its provider, and model usage is billed by that provider. The module itself is free (MIT).
 
 **What content is sent to the AI provider?**
-For the tags of a content: its internationalized text, with HTML stripped and truncated to `llm.max.source.chars` (6000 by default), when you click Apply. For an image: its picture (the original, or its Jahia thumbnail), its file name and its title, for the tags when you click Apply and for the alternative text when the mutation runs. With `alt.generate.on.upload=true`, the default, the picture of each uploaded image is also sent without an action of the editor, on every site of the instance. The module stores the alternative text it receives in the image; it stores no tag until you save.
+For the tags of a content: its internationalized text, with HTML stripped and truncated to `llm.max.source.chars` (6000 by default), when you click Apply. For an image: its picture (the original, or its Jahia thumbnail), its file name and its title, for the tags when you click Apply and for the alternative text when the mutation runs. With `alt.generate.on.upload=true`, the default, the picture of each image uploaded to a site where the module is enabled is also sent without an action of the editor. The module stores the alternative text it receives in the image; it stores no tag until you save.
 
 **Which content types can be tagged?**
 Standard content, pages, main-resource content and images (`jnt:content`, `jnt:page`, `jmix:mainResource`, `jmix:image`). The action is hidden on other node types and on sites where the module is not enabled.

@@ -96,7 +96,11 @@ image.max.bytes=5242880       # largest image sent to the model, for the alterna
 #llm.user.prompt=Respond ONLY with a JSON array of concise single- or two-word strings, without markdown, explanations or duplicates.
 
 # --- Alternative text ---
-alt.generate.on.upload=true   # generate the text of each new image, in every site language
+alt.generate.on.upload=true   # generate the text of each new image, in every site language, on the
+                              # sites where the module is enabled
+alt.upload.max.queue=200      # most uploaded images that wait for their text; the next ones get none
+alt.upload.max.calls=30       # model calls that the uploads of one user may make per window (0 = no limit)
+alt.upload.window.seconds=600 # the window of alt.upload.max.calls
 alt.property=jahia_ai_alt     # property that receives the text: a single-valued string
 alt.mixin=jmix:jahiaAlt       # mixin added before writing; empty when the image types declare it
 alt.max.length=150            # characters of one alternative text (20 to 1000)
@@ -195,25 +199,40 @@ mutation {
   Editor, where it shows as the "AI alternative text" field of an image.
 - A rule (`META-INF/rules.drl`) adds `jmix:jahiaAlt` to each image when it is uploaded or replaced,
   on the same trigger as Jahia's own `jmix:image`, so the Content Editor shows the field on every image.
-- With `alt.generate.on.upload=true` (the default), the same rule also queues the generation of the
-  text. A few seconds after the upload, it is written in every language of the image's site, as the
-  uploader, without replacing an existing text. The upload itself does not wait for the model, and
-  the server log says what each language got. The
-  Content Editor ignores `extends = jmix:image`, because an image's primary type is `jnt:file`. An
+  The Content Editor ignores `extends = jmix:image`, because an image's primary type is `jnt:file`. An
   image uploaded before the module gets the mixin when it is replaced, or when the mutation writes
   its text. The rule always adds `jmix:jahiaAlt`, even when `alt.mixin` names another mixin.
+- With `alt.generate.on.upload=true` (the default), the same rule also queues the generation of the
+  text, for an image of a site where the module is enabled. A few seconds after the upload, the text
+  is written in every language of the site, as the uploader. The upload itself does not wait for the
+  model, and the server log says what each language got. An image outside `/sites` (a file of a
+  user, a mount) and an image of a site without the module get the field, and no text.
+- A first upload never replaces an existing text. A picture that replaces an earlier one, in a file
+  that already existed, gets a new text in every language: the old text describes the old picture.
+- The generation at upload is bounded. At most `alt.upload.max.queue` images wait for their text.
+  The uploads of one user make at most `alt.upload.max.calls` model calls per
+  `alt.upload.window.seconds`, 30 per 10 minutes by default, which leaves that user half of the
+  default rate limit of ai-assistant for the dialog and the mutation. A stop at the rate limit or on
+  a busy provider pauses the uploads of that user for a minute. The server log names each image left without a
+  text; the mutation writes it later.
 
-## Known limits of 2.0.0
+## Known limits
 
-- **The upload rule acts on every site of the instance**, also on a site where the module is not
-  enabled. Each uploaded or replaced image gets `jmix:jahiaAlt`. With `alt.generate.on.upload=true`
-  (the default), its picture is also sent to the model of the tier `vision`, once per language of its
-  site, with no action of the editor. Set `alt.generate.on.upload=false` to generate a text only
+- **The upload rule adds `jmix:jahiaAlt` to every uploaded image of the instance**, also on a site
+  where the module is not enabled. Only the generation of the text is limited to the sites with the
+  module.
+- **On a site with the module, an upload sends the picture to the model with no action of the
+  editor**, once per language of the site. Set `alt.generate.on.upload=false` to generate a text only
   through the mutation.
-- **The generation at upload counts on the uploader's rate limit.** An image on a site with ten
-  languages makes ten model calls, and ai-assistant allows each user 60 calls per 10 minutes by default
-  (`rate.limit.requests`). Once the limit is reached, the other languages and the next images get no
-  text at upload. Run the mutation later: it skips the texts already written.
+- **The generation at upload counts on the uploader's rate limit in ai-assistant.** An image on a site
+  with ten languages makes ten model calls. `alt.upload.max.calls` caps what the uploads of one user
+  take; an image uploaded beyond it gets no text at upload.
+- **A picture is a replacement when it is written more than ten seconds after its file was created.**
+  A replacement
+  rewrites the text of every site language, also a text that an editor corrected.
+- **Each call of the mutation lists every image below `path`** before it applies `resumeFrom`, so a
+  call on a very large tree is slow to start. The index of Jahia gives no reliable order to page on:
+  the entry of a file also holds the identifiers of its resource, its thumbnails and its translations.
 - **The module is built against ai-assistant `0.1.0-SNAPSHOT`** (its `main` of 24 November 2026),
   because ai-assistant has no release yet. It imports `org.jahia.modules.genai.api` in the range
   `[0.1,1)`.
@@ -225,8 +244,8 @@ mutation {
 
 ## Security notes
 
-- With `alt.generate.on.upload=true` (the default), the picture of each uploaded image goes to the
-  model without an action of the editor, on every site of the instance.
+- With `alt.generate.on.upload=true` (the default), the picture of each image uploaded to a site where
+  the module is enabled goes to the model without an action of the editor.
 - The tagging actions accept **POST only**, require an authenticated user with `jcr:write_default`
   permission on the node, and read content strictly through the caller's JCR session.
 - Each model call names the site of its content, so ai-assistant checks the permission `genaiAccess`
