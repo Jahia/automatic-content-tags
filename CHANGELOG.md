@@ -36,6 +36,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   property name; a single-valued tag property receives the tags joined with ", ".
 - Configuration key `llm.tier`, the ai-assistant tier of the tags of a content from its text
   (default `lite`).
+- Each model call names the site of its content, so ai-assistant checks the permission
+  `genaiAccess` of the calling user on that site. A user without it gets HTTP 403 from the tagging
+  action and a `FAILED` image from the mutation, without a model call. A content outside `/sites`
+  resolves to the system site.
 - Unit tests (JUnit 5, Mockito).
 
 ### Changed
@@ -51,9 +55,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   uploaded image gets `jmix:jahiaAlt`, and with `alt.generate.on.upload=true` (the default) its
   picture is sent to the model once per site language, on the uploader's rate limit in ai-assistant.
   Set `alt.generate.on.upload=false` to generate a text only through the mutation.
-- The calls to ai-assistant name no site. ai-assistant `0.1.0-SNAPSHOT` logs a warning per call and
-  announces that a later release refuses such a call.
-- No Maven repository and no Store entry holds ai-assistant yet: build it from its repository.
+- The module is built against ai-assistant `0.1.0-SNAPSHOT`, which has no release yet. No Maven
+  repository and no Store entry holds ai-assistant: build it from its repository.
 - Before an uninstall, remove `jmix:jahiaAlt` from the images that carry it. The README lists these
   limits with their details.
 

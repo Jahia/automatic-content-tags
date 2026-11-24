@@ -8,6 +8,7 @@ import org.jahia.modules.genai.api.StopReason;
 import org.jahia.modules.genai.api.Usage;
 import org.jahia.se.modules.contenttags.service.TagTarget;
 import org.jahia.services.content.JCRNodeWrapper;
+import org.jahia.services.content.decorator.JCRSiteNode;
 import org.jahia.services.content.nodetypes.ExtendedNodeType;
 import org.jahia.services.content.nodetypes.ExtendedPropertyDefinition;
 import org.junit.jupiter.api.BeforeEach;
@@ -167,6 +168,19 @@ class ContentTagsServiceImplTest {
     void aCurrentConfigurationHasNoLegacyKey() {
         assertTrue(ContentTagsServiceImpl.legacyKeys(Map.of("llm.tier", "lite", "alt.tier", "lite")).isEmpty());
         assertTrue(ContentTagsServiceImpl.legacyKeys(null).isEmpty());
+    }
+
+    @Test
+    void theCallNamesTheSiteOfTheNode() throws Exception {
+        JCRNodeWrapper article = node("news", "Jahia ships a vision tier");
+        JCRSiteNode site = mock(JCRSiteNode.class);
+        when(site.getSiteKey()).thenReturn("acme");
+        when(article.getResolveSite()).thenReturn(site);
+        answer("[\"jahia\"]");
+
+        service.generateTags(article, "English", 1);
+
+        assertEquals(Optional.of("acme"), sent().site());
     }
 
     /** A node named {@code name} whose only internationalized string property holds {@code text}, if any. */

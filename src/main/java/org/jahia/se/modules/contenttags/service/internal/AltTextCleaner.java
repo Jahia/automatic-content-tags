@@ -17,6 +17,9 @@ final class AltTextCleaner {
 
     private static final String QUOTES = "\"'`“”‘’«»";
 
+    /** The punctuation a cut text must not end on: comma, semicolon, colon, hyphen, en dash and em dash. */
+    private static final String CUT_TRAIL = ",;:-\u2013\u2014";
+
     private static final Set<Character.UnicodeScript> PERIOD_SCRIPTS = EnumSet.of(
             Character.UnicodeScript.LATIN, Character.UnicodeScript.GREEK, Character.UnicodeScript.CYRILLIC);
 
@@ -52,7 +55,11 @@ final class AltTextCleaner {
         if (space > maxLength / 2) {
             cut = cut.substring(0, space);
         }
-        return cut.replaceAll("[\\s,;:\\-–—]+$", "");
+        int end = cut.length();
+        while (end > 0 && (Character.isWhitespace(cut.charAt(end - 1)) || CUT_TRAIL.indexOf(cut.charAt(end - 1)) >= 0)) {
+            end--;
+        }
+        return cut.substring(0, end);
     }
 
     /** Adds a period after a final letter or digit of a script that ends its sentences with one. */

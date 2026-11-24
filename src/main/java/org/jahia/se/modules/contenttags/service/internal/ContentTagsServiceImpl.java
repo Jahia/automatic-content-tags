@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Default {@link ContentTagsService} implementation.
@@ -62,21 +63,25 @@ public class ContentTagsServiceImpl implements ContentTagsService {
     @Reference
     GenAiService genAi;
 
-    private volatile Config config = Config.from(ConfigValues.of(Map.of()));
+    // An immutable snapshot, replaced as a whole when the configuration changes.
+    private final AtomicReference<Config> config = new AtomicReference<>(Config.from(ConfigValues.of(Map.of())));
 
     @Activate
     @Modified
     void configure(Map<String, Object> properties) {
-        config = Config.from(ConfigValues.of(properties));
+        Config cfg = Config.from(ConfigValues.of(properties));
+        config.set(cfg);
         List<String> legacy = legacyKeys(properties);
         if (!legacy.isEmpty()) {
             LOGGER.warn("Automatic Content Tags ignores the 1.x provider keys {}: configure the provider, the model "
                     + "and the API key in ai-assistant (org.jahia.modules.genai.cfg), then remove these keys", legacy);
         }
-        LOGGER.info("Automatic Content Tags configured: tags in {}, on the ai-assistant tier '{}' ({}), and on "
-                        + "'{}' for an image ({})", config.tagTarget(), config.tier().id(),
-                genAi.isAvailable(config.tier()) ? "available" : "not configured yet", ModelTier.VISION.id(),
-                genAi.isAvailable(ModelTier.VISION) ? "available" : "not configured yet");
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("Automatic Content Tags configured: tags in {}, on the ai-assistant tier '{}' ({}), and on "
+                            + "'{}' for an image ({})", cfg.tagTarget(), cfg.tier().id(),
+                    genAi.isAvailable(cfg.tier()) ? "available" : "not configured yet", ModelTier.VISION.id(),
+                    genAi.isAvailable(ModelTier.VISION) ? "available" : "not configured yet");
+        }
     }
 
     /** The keys of the 1.x built-in providers, which no longer have any effect; never their values. */
@@ -93,7 +98,7 @@ public class ContentTagsServiceImpl implements ContentTagsService {
 
     @Override
     public List<String> generateTags(JCRNodeWrapper node, String tagLanguage, int numberOfTags) {
-        Config cfg = config;
+        Config cfg = config.get();
         int count = clampCount(numberOfTags, cfg.tagCountDefault(), cfg.tagCountMax());
 
         String text = extractText(node, cfg.maxSourceChars());
@@ -107,6 +112,7 @@ public class ContentTagsServiceImpl implements ContentTagsService {
         // carry style guidance (and must not hardcode a number).
         String ask = "Generate exactly " + count + " relevant tags, in " + tagLanguage;
         CompletionRequest.Builder request = CompletionRequest.builder()
+                .site(RequestSite.of(node))
                 .maxOutputTokens(cfg.maxTokens())
                 .temperature(cfg.temperature());
         if (picture.isPresent()) {
@@ -117,7 +123,9 @@ public class ContentTagsServiceImpl implements ContentTagsService {
             request.tier(cfg.tier()).input(ask + ", for the following content. " + cfg.prompt() + " Content: " + text);
         }
         CompletionRequest built = request.build();
-        LOGGER.debug("Requesting {} tags on tier '{}' for node {}", count, built.tier().id(), node.getPath());
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Requesting {} tags on tier '{}' for node {}", count, built.tier().id(), node.getPath());
+        }
         CompletionResult result = genAi.complete(built);
         List<String> tags = TagResponseParser.parse(result.text(), count);
         LOGGER.debug("Model {} returned {} tags for node {}", result.model(), tags.size(), node.getPath());
@@ -126,7 +134,7 @@ public class ContentTagsServiceImpl implements ContentTagsService {
 
     @Override
     public Optional<TagTarget> tagTarget(JCRNodeWrapper node) throws RepositoryException {
-        TargetProperty target = config.tagTarget();
+        TargetProperty target = config.get().tagTarget();
         ExtendedPropertyDefinition definition = definitionOf(node, target);
         if (definition == null || !TargetProperty.holdsText(definition)) {
             LOGGER.debug("The tag property {} cannot hold tags on {}", target, node.getPath());
@@ -143,12 +151,12 @@ public class ContentTagsServiceImpl implements ContentTagsService {
 
     @Override
     public int getDefaultTagCount() {
-        return config.tagCountDefault();
+        return config.get().tagCountDefault();
     }
 
     @Override
     public int getMaxTagCount() {
-        return config.tagCountMax();
+        return config.get().tagCountMax();
     }
 
     /**

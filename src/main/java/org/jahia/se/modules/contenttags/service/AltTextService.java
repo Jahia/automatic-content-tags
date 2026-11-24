@@ -32,7 +32,9 @@ public interface AltTextService {
      * {@code overwrite} is true. Each image is saved on its own, so the images done before a failure
      * keep their text. The images are visited in path order. An invocation makes at most
      * {@link #getMaxImages()} model calls, and makes no new call once it has run for {@code alt.max.seconds};
-     * the report then names the image to resume from.</p>
+     * the report then names the image to resume from. Each call names the site of its image: an image on a
+     * site where the calling user does not hold the permission {@code genaiAccess} fails without a model
+     * call.</p>
      *
      * @param node            the image or the folder, read through the calling user's session in the
      *                        target locale

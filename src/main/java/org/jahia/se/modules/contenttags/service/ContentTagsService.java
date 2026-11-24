@@ -29,6 +29,8 @@ public interface ContentTagsService {
      *         model for the tier of the call ({@code llm.tier}, or {@code vision} for an image)
      * @throws org.jahia.modules.genai.api.GenAiQuotaExceededException when the calling user has
      *         reached the rate limit of ai-assistant
+     * @throws org.jahia.modules.genai.api.GenAiAccessDeniedException when the calling user does not hold
+     *         the permission {@code genaiAccess} on the site of the node
      * @throws org.jahia.modules.genai.api.GenAiProviderException when the provider call fails
      */
     List<String> generateTags(JCRNodeWrapper node, String tagLanguage, int numberOfTags);

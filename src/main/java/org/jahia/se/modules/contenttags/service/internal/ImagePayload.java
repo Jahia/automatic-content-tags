@@ -46,26 +46,31 @@ final class ImagePayload {
      */
     static Optional<ImageInput> select(Node image, long maxBytes) throws RepositoryException, IOException {
         for (String rendition : RENDITIONS) {
-            if (!image.hasNode(rendition)) {
-                continue;
-            }
-            Node resource = image.getNode(rendition);
-            if (!resource.hasProperty("jcr:data") || !resource.hasProperty("jcr:mimeType")) {
-                continue;
-            }
-            Optional<String> mediaType = sendableMediaType(resource.getProperty("jcr:mimeType").getString());
-            Property data = resource.getProperty("jcr:data");
-            if (mediaType.isEmpty() || data.getLength() <= 0 || data.getLength() > maxBytes) {
-                continue;
-            }
-            Binary binary = data.getBinary();
-            try (InputStream stream = binary.getStream()) {
-                return Optional.of(ImageInput.of(stream.readNBytes((int) maxBytes), mediaType.get()));
-            } finally {
-                binary.dispose();
+            Optional<ImageInput> input = image.hasNode(rendition) ? read(image.getNode(rendition), maxBytes)
+                    : Optional.empty();
+            if (input.isPresent()) {
+                return input;
             }
         }
         return Optional.empty();
+    }
+
+    /** One rendition, or empty when the model does not accept its format or it is larger than {@code maxBytes}. */
+    private static Optional<ImageInput> read(Node resource, long maxBytes) throws RepositoryException, IOException {
+        if (!resource.hasProperty("jcr:data") || !resource.hasProperty("jcr:mimeType")) {
+            return Optional.empty();
+        }
+        Optional<String> mediaType = sendableMediaType(resource.getProperty("jcr:mimeType").getString());
+        Property data = resource.getProperty("jcr:data");
+        if (mediaType.isEmpty() || data.getLength() <= 0 || data.getLength() > maxBytes) {
+            return Optional.empty();
+        }
+        Binary binary = data.getBinary();
+        try (InputStream stream = binary.getStream()) {
+            return Optional.of(ImageInput.of(stream.readNBytes((int) maxBytes), mediaType.get()));
+        } finally {
+            binary.dispose();
+        }
     }
 
     /**

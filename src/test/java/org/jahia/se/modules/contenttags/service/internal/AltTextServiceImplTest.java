@@ -2,6 +2,7 @@ package org.jahia.se.modules.contenttags.service.internal;
 
 import org.jahia.modules.genai.api.CompletionRequest;
 import org.jahia.modules.genai.api.CompletionResult;
+import org.jahia.modules.genai.api.GenAiAccessDeniedException;
 import org.jahia.modules.genai.api.GenAiNotConfiguredException;
 import org.jahia.modules.genai.api.GenAiProviderException;
 import org.jahia.modules.genai.api.GenAiQuotaExceededException;
@@ -17,6 +18,7 @@ import org.jahia.services.content.JCRNodeIteratorWrapper;
 import org.jahia.services.content.JCRNodeWrapper;
 import org.jahia.services.content.JCRPropertyWrapper;
 import org.jahia.services.content.JCRSessionWrapper;
+import org.jahia.services.content.decorator.JCRSiteNode;
 import org.jahia.services.content.nodetypes.ExtendedPropertyDefinition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -175,6 +177,38 @@ class AltTextServiceImplTest {
         assertEquals(1, report.count(Status.FAILED));
         verify(genAi, never()).complete(any());
         verify(image, never()).setProperty(anyString(), anyString());
+    }
+
+    @Test
+    void theCallNamesTheSiteOfTheImage() throws Exception {
+        JCRNodeWrapper image = image("/sites/acme/files/cat.png", null, true);
+        JCRSiteNode site = mock(JCRSiteNode.class);
+        when(site.getSiteKey()).thenReturn("acme");
+        when(image.getResolveSite()).thenReturn(site);
+        answer("A grey cat.");
+
+        service.fillAltText(image, false, false, null);
+
+        ArgumentCaptor<CompletionRequest> request = ArgumentCaptor.forClass(CompletionRequest.class);
+        verify(genAi).complete(request.capture());
+        assertEquals(Optional.of("acme"), request.getValue().site());
+    }
+
+    @Test
+    void anImageOnASiteWhereTheUserMayNotUseAiFailsAndDoesNotCount() throws Exception {
+        service.configure(Map.of("alt.max.images", "1"));
+        JCRNodeWrapper folder = folder("/sites",
+                image("/sites/closed/files/a.png", null, true),
+                image("/sites/open/files/b.png", null, true));
+        when(genAi.complete(any()))
+                .thenThrow(new GenAiAccessDeniedException("closed", "The permission 'genaiAccess' is required"))
+                .thenReturn(result("A photo."));
+
+        AltTextReport report = service.fillAltText(folder, true, false, null);
+
+        assertEquals(1, report.count(Status.FAILED));
+        assertEquals(1, report.count(Status.GENERATED));
+        assertFalse(report.truncated());
     }
 
     @Test

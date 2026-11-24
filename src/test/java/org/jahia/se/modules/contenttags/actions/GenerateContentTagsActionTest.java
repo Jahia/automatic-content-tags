@@ -1,5 +1,6 @@
 package org.jahia.se.modules.contenttags.actions;
 
+import org.jahia.modules.genai.api.GenAiAccessDeniedException;
 import org.jahia.modules.genai.api.GenAiProviderException;
 import org.jahia.se.modules.contenttags.service.ContentTagsService;
 import org.jahia.services.content.JCRNodeWrapper;
@@ -20,7 +21,7 @@ class GenerateContentTagsActionTest {
     private JCRNodeWrapper node;
 
     @BeforeEach
-    void setUp() throws Exception {
+    void setUp() {
         contentTagsService = mock(ContentTagsService.class);
         action = new GenerateContentTagsAction();
         action.setContentTagsService(contentTagsService);
@@ -47,6 +48,13 @@ class GenerateContentTagsActionTest {
         failWith(new GenAiProviderException("bad request", false, 400));
 
         assertEquals(500, execute());
+    }
+
+    @Test
+    void aUserWithoutTheAiPermissionOnTheSiteAnswers403() throws Exception {
+        failWith(new GenAiAccessDeniedException("acme", "The permission 'genaiAccess' is required on the site 'acme'"));
+
+        assertEquals(403, execute());
     }
 
     private void failWith(RuntimeException failure) {

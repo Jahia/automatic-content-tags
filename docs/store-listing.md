@@ -44,6 +44,7 @@ It is built to Jahia's security and integration standards: the action is POST-on
 
 - Jahia 8.2.3.2 or later, which ai-assistant requires.
 - ai-assistant, with a model for the `lite` tier, and a model that accepts images for the `vision` tier. The alternative text and the tags of an image use `vision`. Model usage is billed by the provider configured in ai-assistant. ai-assistant requires mcp-server; content-governance is optional for it. No Store entry holds ai-assistant yet: it is built from its repository.
+- The permission `genaiAccess` on the site for each user of the features. ai-assistant grants it to the editorial roles.
 
 ## Installation
 

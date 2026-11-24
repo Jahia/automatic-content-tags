@@ -2,6 +2,7 @@ package org.jahia.se.modules.contenttags.service.internal;
 
 import org.jahia.modules.genai.api.CompletionRequest;
 import org.jahia.modules.genai.api.CompletionResult;
+import org.jahia.modules.genai.api.GenAiAccessDeniedException;
 import org.jahia.modules.genai.api.GenAiProviderException;
 import org.jahia.modules.genai.api.GenAiQuotaExceededException;
 import org.jahia.modules.genai.api.GenAiService;
@@ -34,6 +35,7 @@ import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 
 /**
@@ -64,22 +66,26 @@ public class AltTextServiceImpl implements AltTextService {
     // Package-private for the unit tests, which move the clock.
     LongSupplier nanoTime = System::nanoTime;
 
-    private volatile Config config = Config.from(ConfigValues.of(Map.of()));
+    // An immutable snapshot, replaced as a whole when the configuration changes.
+    private final AtomicReference<Config> config = new AtomicReference<>(Config.from(ConfigValues.of(Map.of())));
 
     @Activate
     @Modified
     void configure(Map<String, Object> properties) {
-        config = Config.from(ConfigValues.of(properties));
-        LOGGER.info("Automatic Content Tags configured: alternative text in {}, on the ai-assistant tier '{}' ({}), "
-                        + "at most {} images and {} seconds per call", config.target(), ModelTier.VISION.id(),
-                genAi.isAvailable(ModelTier.VISION) ? "available" : "not configured yet", config.maxImages(),
-                config.maxSeconds());
+        Config cfg = Config.from(ConfigValues.of(properties));
+        config.set(cfg);
+        if (LOGGER.isInfoEnabled()) {
+            LOGGER.info("Automatic Content Tags configured: alternative text in {}, on the ai-assistant tier '{}' "
+                            + "({}), at most {} images and {} seconds per call", cfg.target(), ModelTier.VISION.id(),
+                    genAi.isAvailable(ModelTier.VISION) ? "available" : "not configured yet", cfg.maxImages(),
+                    cfg.maxSeconds());
+        }
     }
 
     @Override
     public AltTextReport fillAltText(JCRNodeWrapper node, boolean includeSubNodes, boolean overwrite,
                                      String resumeFrom) throws RepositoryException {
-        Config cfg = config;
+        Config cfg = config.get();
         long deadline = nanoTime.getAsLong() + TimeUnit.SECONDS.toNanos(cfg.maxSeconds());
         List<AltTextResult> results = new ArrayList<>();
         // Only the images sent to the model count: a skipped or refused image costs nothing.
@@ -91,29 +97,26 @@ public class AltTextServiceImpl implements AltTextService {
         for (JCRNodeWrapper listed : images.values()) {
             String path = listed.getPath();
             try {
-                JCRNodeWrapper image = listed;
-                Prepared prepared;
-                try {
-                    prepared = prepare(image, overwrite, cfg);
-                } catch (InvalidItemStateException e) {
-                    // A stale read before the model call: check the fresh copy once more.
-                    image = reload(image);
-                    prepared = prepare(image, overwrite, cfg);
-                }
+                Checked checked = check(listed, overwrite, cfg);
+                Prepared prepared = checked.prepared();
                 if (prepared.result() != null) {
                     results.add(prepared.result());
                     continue;
                 }
-                // The time limit leaves the first call alone, so that every invocation moves forward.
-                if (modelCalls == cfg.maxImages() || modelCalls > 0 && nanoTime.getAsLong() - deadline >= 0) {
+                if (limitReached(modelCalls, deadline, cfg)) {
                     return new AltTextReport(results, path);
                 }
                 modelCalls++;
-                results.add(generate(image, prepared, overwrite, cfg));
+                results.add(generate(checked.image(), prepared, overwrite, cfg));
             } catch (GenAiQuotaExceededException e) {
                 results.add(new AltTextResult(path, AltTextResult.Status.FAILED, null,
                         "The AI rate limit is reached, try again later"));
                 return new AltTextReport(results, path);
+            } catch (GenAiAccessDeniedException e) {
+                // ai-assistant sent nothing to the model, so this image does not count.
+                modelCalls--;
+                results.add(new AltTextResult(path, AltTextResult.Status.FAILED, null,
+                        "The permission genaiAccess is required on the site of this image"));
             } catch (GenAiProviderException e) {
                 // Only a retryable failure gets here, and ai-assistant already retried it: the next
                 // image would meet the same busy or broken provider.
@@ -127,6 +130,28 @@ public class AltTextServiceImpl implements AltTextService {
             }
         }
         return new AltTextReport(results, null);
+    }
+
+    /**
+     * Whether the invocation must stop before its next model call: at {@code alt.max.images} calls, or after
+     * {@code alt.max.seconds}. The time limit leaves the first call alone, so that every invocation moves forward.
+     */
+    private boolean limitReached(int modelCalls, long deadline, Config cfg) {
+        return modelCalls == cfg.maxImages() || modelCalls > 0 && nanoTime.getAsLong() - deadline >= 0;
+    }
+
+    /** An image and what its checks gave, on the copy of the image that was checked. */
+    private record Checked(JCRNodeWrapper image, Prepared prepared) {
+    }
+
+    /** The checks of one image before its model call. A stale read is checked once more, on a fresh copy. */
+    private Checked check(JCRNodeWrapper listed, boolean overwrite, Config cfg) throws RepositoryException {
+        try {
+            return new Checked(listed, prepare(listed, overwrite, cfg));
+        } catch (InvalidItemStateException e) {
+            JCRNodeWrapper fresh = reload(listed);
+            return new Checked(fresh, prepare(fresh, overwrite, cfg));
+        }
     }
 
     private static AltTextResult skipped(String path, String existing) {
@@ -146,7 +171,7 @@ public class AltTextServiceImpl implements AltTextService {
 
     @Override
     public int getMaxImages() {
-        return config.maxImages();
+        return config.get().maxImages();
     }
 
     /**
@@ -239,6 +264,7 @@ public class AltTextServiceImpl implements AltTextService {
         try {
             result = genAi.complete(CompletionRequest.builder()
                     .tier(ModelTier.VISION)
+                    .site(RequestSite.of(image))
                     .instructions(cfg.instructions())
                     .input(prepared.prompt())
                     .images(List.of(prepared.picture()))

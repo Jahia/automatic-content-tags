@@ -22,6 +22,10 @@ Runs on Jahia 8.2.3.2 or later, which ai-assistant requires. Requires Java 17 to
 - The model of `vision` must accept images. With no `vision.*` key, ai-assistant uses its shared
   model for `vision`; the shipped `mistral/mistral-small-latest` accepts images. The
   `docs/genai/README.md` of ai-assistant states what each tier needs.
+- The permission `genaiAccess` on the site, for each user who generates tags or alternative text.
+  ai-assistant defines it and grants it to the editorial roles. Each model call names the site of
+  its content, and ai-assistant refuses a user who does not hold the permission there. A content
+  outside `/sites`, such as a file of a user, resolves to the system site.
 - `graphql-dxm-provider`, which every Jahia 8.2 ships.
 
 ## Features
@@ -210,10 +214,9 @@ mutation {
   languages makes ten model calls, and ai-assistant allows each user 60 calls per 10 minutes by default
   (`rate.limit.requests`). Once the limit is reached, the other languages and the next images get no
   text at upload. Run the mutation later: it skips the texts already written.
-- **The calls name no site.** ai-assistant logs one warning per call (`names no site, so no genaiAccess
-  check applies`) and announces that a later release refuses a call with no site. This version works
-  with ai-assistant `0.1.0-SNAPSHOT` (its `main` of 24 November 2026); a later version of this module
-  will name the site of each call.
+- **The module is built against ai-assistant `0.1.0-SNAPSHOT`** (its `main` of 24 November 2026),
+  because ai-assistant has no release yet. It imports `org.jahia.modules.genai.api` in the range
+  `[0.1,1)`.
 - **Before an uninstall**, the images keep the mixin `jmix:jahiaAlt`, which the module defines. List them
   with the JCR-SQL2 query `SELECT * FROM [jmix:jahiaAlt]` and remove the mixin from them first, or keep
   the module installed.
@@ -226,6 +229,9 @@ mutation {
   model without an action of the editor, on every site of the instance.
 - The tagging actions accept **POST only**, require an authenticated user with `jcr:write_default`
   permission on the node, and read content strictly through the caller's JCR session.
+- Each model call names the site of its content, so ai-assistant checks the permission `genaiAccess`
+  of the calling user on that site and names the site in its audit log. A refused user gets HTTP 403
+  from the tagging action, and a `FAILED` image from the mutation, without a model call.
 - The mutation refuses the guest user, runs under the caller's session, lists only the images that
   user can read, and makes no model call for an image that user cannot edit (`jcr:write_default`).
 - The CSRF guard whitelist covers only `*.generateContentTagsAction.do` and `*.contentTagsConfig.do`;
