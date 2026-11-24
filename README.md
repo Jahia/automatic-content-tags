@@ -18,7 +18,7 @@ Runs on Jahia 8.2.3.2 or later, which ai-assistant requires. Requires Java 17 to
 - [ai-assistant](https://github.com/Jahia/ai-assistant) installed and started, with the tier
   `vision`. Each call that sends an image uses `vision`: the alternative text, and the tags of an
   image. The tags of other content use `llm.tier` (`lite` by default). ai-assistant requires
-  mcp-server and content-governance.
+  mcp-server; content-governance is optional for it.
 - The model of `vision` must accept images. With no `vision.*` key, ai-assistant uses its shared
   model for `vision`; the shipped `mistral/mistral-small-latest` accepts images. The
   `docs/genai/README.md` of ai-assistant states what each tier needs.
@@ -199,8 +199,31 @@ mutation {
   image uploaded before the module gets the mixin when it is replaced, or when the mutation writes
   its text. The rule always adds `jmix:jahiaAlt`, even when `alt.mixin` names another mixin.
 
+## Known limits of 2.0.0
+
+- **The upload rule acts on every site of the instance**, also on a site where the module is not
+  enabled. Each uploaded or replaced image gets `jmix:jahiaAlt`. With `alt.generate.on.upload=true`
+  (the default), its picture is also sent to the model of the tier `vision`, once per language of its
+  site, with no action of the editor. Set `alt.generate.on.upload=false` to generate a text only
+  through the mutation.
+- **The generation at upload counts on the uploader's rate limit.** An image on a site with ten
+  languages makes ten model calls, and ai-assistant allows each user 60 calls per 10 minutes by default
+  (`rate.limit.requests`). Once the limit is reached, the other languages and the next images get no
+  text at upload. Run the mutation later: it skips the texts already written.
+- **The calls name no site.** ai-assistant logs one warning per call (`names no site, so no genaiAccess
+  check applies`) and announces that a later release refuses a call with no site. This version works
+  with ai-assistant `0.1.0-SNAPSHOT` (its `main` of 24 November 2026); a later version of this module
+  will name the site of each call.
+- **Before an uninstall**, the images keep the mixin `jmix:jahiaAlt`, which the module defines. List them
+  with the JCR-SQL2 query `SELECT * FROM [jmix:jahiaAlt]` and remove the mixin from them first, or keep
+  the module installed.
+- **No Maven repository and no Store entry holds ai-assistant yet.** Build it from its repository, as the
+  installation steps say.
+
 ## Security notes
 
+- With `alt.generate.on.upload=true` (the default), the picture of each uploaded image goes to the
+  model without an action of the editor, on every site of the instance.
 - The tagging actions accept **POST only**, require an authenticated user with `jcr:write_default`
   permission on the node, and read content strictly through the caller's JCR session.
 - The mutation refuses the guest user, runs under the caller's session, lists only the images that

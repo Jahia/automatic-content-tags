@@ -4,14 +4,18 @@ All notable changes to this module are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres
 to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - Unreleased
+## [2.0.0] - 2026-11-24
 
 ### Added
 - Alternative text of images. The mixin `jmix:jahiaAlt` extends `jmix:image` with the i18n
   property `jahia_ai_alt`, and the GraphQL mutation `generateImageAltText(path, language,
-  includeSubNodes, overwrite)` fills it with a vision model, for one image or for every image below
-  a path. It runs under the caller's session, saves each image on its own, skips an image that
-  already has a text unless `overwrite` is set, and reports one result per image.
+  includeSubNodes, overwrite, resumeFrom)` fills it with a vision model, for one image or for every
+  image below a path. It runs under the caller's session, saves each image on its own, skips an
+  image that already has a text unless `overwrite` is set, and reports one result per image.
+- A call of the mutation stops with `truncated: true` and a `resumeFrom` path at `alt.max.images`
+  model calls, after `alt.max.seconds`, at the rate limit of ai-assistant, or when the AI provider is
+  busy or unavailable. The next call passes that `resumeFrom` to continue. `images` lists the
+  generated and failed images; `images(includeSkipped: true)` also lists the skipped ones.
 - A rule adds `jmix:jahiaAlt` to each uploaded image, like Jahia adds `jmix:image`, so the Content
   Editor shows the alternative text field on every new image.
 - Alternative text at upload: with `alt.generate.on.upload=true` (the default), the text of each new
@@ -36,11 +40,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 - **Breaking**: the module calls its models through ai-assistant, which is now a required
-  dependency. ai-assistant holds the former genai-connector, and needs Jahia 8.2.3.2. The provider,
-  the model and the API key are configured in ai-assistant. The keys `llm.provider` and
-  `anthropic.*`, `openai.*`, `deepseek.*` are no longer read.
-- The tagging action answers HTTP 503 when ai-assistant has no model for the tier, and HTTP 429
-  when the user reached its rate limit.
+  dependency. ai-assistant holds the former genai-connector, needs Jahia 8.2.3.2 and requires
+  mcp-server. The provider, the model and the API key are configured in ai-assistant. The keys
+  `llm.provider` and `anthropic.*`, `openai.*`, `deepseek.*` are no longer read.
+- The tagging action answers HTTP 503 when ai-assistant has no model for the tier or when the AI
+  provider is unavailable, and HTTP 429 at the rate limit of the user or of the provider.
+
+### Known limits
+- The upload rule acts on every site of the instance, also where the module is not enabled: each
+  uploaded image gets `jmix:jahiaAlt`, and with `alt.generate.on.upload=true` (the default) its
+  picture is sent to the model once per site language, on the uploader's rate limit in ai-assistant.
+  Set `alt.generate.on.upload=false` to generate a text only through the mutation.
+- The calls to ai-assistant name no site. ai-assistant `0.1.0-SNAPSHOT` logs a warning per call and
+  announces that a later release refuses such a call.
+- No Maven repository and no Store entry holds ai-assistant yet: build it from its repository.
+- Before an uninstall, remove `jmix:jahiaAlt` from the images that carry it. The README lists these
+  limits with their details.
 
 ### Removed
 - **Breaking**: the built-in Anthropic, OpenAI and DeepSeek providers and the exported
